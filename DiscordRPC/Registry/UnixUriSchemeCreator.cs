@@ -7,10 +7,10 @@ namespace DiscordRPC.Registry
 {
     internal class UnixUriSchemeCreator : IUriSchemeCreator
     {
-        private ILogger logger;
-        public UnixUriSchemeCreator(ILogger logger)
+        private ILoggerRpc _iLoggerRpc;
+        public UnixUriSchemeCreator(ILoggerRpc iLoggerRpc)
         {
-            this.logger = logger;
+            this._iLoggerRpc = iLoggerRpc;
         }
 
         public bool RegisterUriScheme(UriSchemeRegister register)
@@ -18,14 +18,14 @@ namespace DiscordRPC.Registry
             var home = Environment.GetEnvironmentVariable("HOME");
             if (string.IsNullOrEmpty(home))
             {
-                logger.Error("Failed to register because the HOME variable was not set.");
+                _iLoggerRpc.Error("Failed to register because the HOME variable was not set.");
                 return false;
             }
 
             string exe = register.ExecutablePath;
             if (string.IsNullOrEmpty(exe))
             {
-                logger.Error("Failed to register because the application was not located.");
+                _iLoggerRpc.Error("Failed to register because the application was not located.");
                 return false;
             }
 
@@ -60,7 +60,7 @@ MimeType=x-scheme-handler/discord-{2}";
             var directory = Directory.CreateDirectory(filepath);
             if (!directory.Exists)
             {
-                logger.Error("Failed to register because {0} does not exist", filepath);
+                _iLoggerRpc.Error("Failed to register because {0} does not exist", filepath);
                 return false;
             }
 
@@ -70,11 +70,11 @@ MimeType=x-scheme-handler/discord-{2}";
             // Register the Mime type
             if (!RegisterMime(register.ApplicationID))
             {
-                logger.Error("Failed to register because the Mime failed.");
+                _iLoggerRpc.Error("Failed to register because the Mime failed.");
                 return false;
             }
 
-            logger.Trace("Registered {0}, {1}, {2}", filepath + filename, file, command);
+            _iLoggerRpc.Trace("Registered {0}, {1}, {2}", filepath + filename, file, command);
             return true;
         }
 

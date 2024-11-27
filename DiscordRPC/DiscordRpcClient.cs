@@ -7,6 +7,7 @@ using DiscordRPC.Registry;
 using DiscordRPC.RPC;
 using DiscordRPC.RPC.Commands;
 using DiscordRPC.RPC.Payload;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 
@@ -52,18 +53,18 @@ namespace DiscordRPC
         public bool IsDisposed { get; private set; }
 
         /// <summary>
-        /// The logger used this client and its associated components. <see cref="ILogger"/> are not called safely and can come from any thread. It is upto the <see cref="ILogger"/> to account for this and apply appropriate thread safe methods.
+        /// The logger used this client and its associated components. <see cref="ILoggerRpc"/> are not called safely and can come from any thread. It is upto the <see cref="ILoggerRpc"/> to account for this and apply appropriate thread safe methods.
         /// </summary>
-        public ILogger Logger
+        public ILoggerRpc ILoggerRpc
         {
-            get { return _logger; }
+            get { return _iLoggerRpc; }
             set
             {
-                this._logger = value;
-                if (connection != null) connection.Logger = value;
+                this._iLoggerRpc = value;
+                if (connection != null) connection.ILoggerRpc = value;
             }
         }
-        private ILogger _logger;
+        private ILoggerRpc _iLoggerRpc;
 
         /// <summary>
         /// Indicates if the client will automatically invoke the events without <see cref="Invoke"/> having to be called.
@@ -206,20 +207,31 @@ namespace DiscordRPC
         /// </summary>
         /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
         public DiscordRpcClient(string applicationID) : this(applicationID, -1) { }
+        
+        /// <summary>
+        /// Creates a new Discord RPC Client which can be used to send Rich Presence and receive Join / Spectate events.
+        /// </summary>
+        /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
+        /// <param name="logger">Microsoft's implementation of ILogger used to report messages.</param>
+        public DiscordRpcClient(string applicationID, ILogger logger) : this(applicationID, -1, new MsILoggerWrapper(logger)) { }
 
         /// <summary>
         /// Creates a new Discord RPC Client which can be used to send Rich Presence and receive Join / Spectate events. This constructor exposes more advance features such as custom NamedPipeClients and Loggers.
         /// </summary>
         /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
         /// <param name="pipe">The pipe to connect too. If -1, then the client will scan for the first available instance of Discord.</param>
-        /// <param name="logger">The logger used to report messages. If null, then a <see cref="NullLogger"/> will be created and logs will be ignored.</param>
+        /// <param name="logger">The logger used to report messages. If null, then a <see cref="NullILoggerRpc"/> will be created and logs will be ignored.</param>
         /// <param name="autoEvents">Should events be automatically invoked from the RPC Thread as they arrive from discord?</param>
         /// <param name="client">The pipe client to use and communicate to discord through. If null, the default <see cref="ManagedNamedPipeClient"/> will be used.</param>
-        public DiscordRpcClient(string applicationID, int pipe = -1, ILogger logger = null, bool autoEvents = true, INamedPipeClient client = null)
+        public DiscordRpcClient(string           applicationID, 
+                                int              pipe       = -1, 
+                                ILoggerRpc       logger = null, 
+                                bool             autoEvents = true,
+                                INamedPipeClient client     = null)
         {
             // Make sure appID is NOT null.
             if (string.IsNullOrEmpty(applicationID))
-                throw new ArgumentNullException("applicationID");
+                throw new ArgumentNullException(nameof(applicationID));
 
             // Store the properties
             ApplicationID = applicationID.Trim();
@@ -230,13 +242,13 @@ namespace DiscordRPC
             SkipIdenticalPresence = true;
 
             // Prepare the logger
-            _logger = logger ?? new NullLogger();
+            _iLoggerRpc = logger ?? new NullILoggerRpc();
 
             // Create the RPC client, giving it the important details
             connection = new RpcConnection(ApplicationID, ProcessID, TargetPipe, client ?? new ManagedNamedPipeClient(), autoEvents ? 0 : 128U)
             {
                 ShutdownOnly = _shutdownOnly,
-                Logger = _logger
+                ILoggerRpc = _iLoggerRpc
             };
 
             // Subscribe to its event
@@ -262,7 +274,7 @@ namespace DiscordRPC
         {
             if (AutoEvents)
             {
-                Logger.Error("Cannot Invoke client when AutomaticallyInvokeEvents has been set.");
+                ILoggerRpc.Error("Cannot Invoke client when AutomaticallyInvokeEvents has been set.");
                 return new IMessage[0];
                 // throw new InvalidOperationException("Cannot Invoke client when AutomaticallyInvokeEvents has been set.");
             }
@@ -408,7 +420,7 @@ namespace DiscordRPC
 
                 // We got a message we dont know what to do with.
                 default:
-                    Logger.Error("Message was queued with no appropriate handle! {0}", message.Type);
+                    ILoggerRpc.Error("Message was queued with no appropriate handle! {0}", message.Type);
                     break;
             }
         }
@@ -447,7 +459,7 @@ namespace DiscordRPC
                 throw new ObjectDisposedException("Connection", "Cannot initialize as the connection has been deinitialized");
 
             if (!IsInitialized)
-                Logger.Warning("The client is not yet initialized, storing the presence as a state instead.");
+                ILoggerRpc.Warning("The client is not yet initialized, storing the presence as a state instead.");
 
             // Send the event
             if (presence == null)
@@ -467,7 +479,7 @@ namespace DiscordRPC
                     throw new BadPresenceException("Presence maximum party size cannot be smaller than the current size.");
 
                 if (presence.HasSecrets() && !presence.HasParty())
-                    Logger.Warning("The presence has set the secrets but no buttons will show as there is no party available.");
+                    ILoggerRpc.Warning("The presence has set the secrets but no buttons will show as there is no party available.");
 
                 // Send the presence, but only if we are not skipping
                 if (!SkipIdenticalPresence || !presence.Matches(CurrentPresence))
@@ -694,7 +706,7 @@ namespace DiscordRPC
         /// <returns></returns>
         public bool RegisterUriScheme(string steamAppID = null, string executable = null)
         {
-            var urischeme = new UriSchemeRegister(_logger, ApplicationID, steamAppID, executable);
+            var urischeme = new UriSchemeRegister(_iLoggerRpc, ApplicationID, steamAppID, executable);
             return HasRegisteredUriScheme = urischeme.RegisterUriScheme();
         }
 
@@ -727,7 +739,7 @@ namespace DiscordRPC
             }
             else
             {
-                Logger.Warning("Client has not yet initialized, but events are being subscribed too. Storing them as state instead.");
+                ILoggerRpc.Warning("Client has not yet initialized, but events are being subscribed too. Storing them as state instead.");
             }
 
             lock (_sync)

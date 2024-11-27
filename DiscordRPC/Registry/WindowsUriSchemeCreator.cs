@@ -5,10 +5,10 @@ namespace DiscordRPC.Registry
 {
     internal class WindowsUriSchemeCreator : IUriSchemeCreator
     {
-        private ILogger logger;
-        public WindowsUriSchemeCreator(ILogger logger)
+        private ILoggerRpc _iLoggerRpc;
+        public WindowsUriSchemeCreator(ILoggerRpc iLoggerRpc)
         {
-            this.logger = logger;
+            this._iLoggerRpc = iLoggerRpc;
         }
 
         public bool RegisterUriScheme(UriSchemeRegister register)
@@ -22,7 +22,7 @@ namespace DiscordRPC.Registry
             string location = register.ExecutablePath;
             if (location == null)
             {
-                logger.Error("Failed to register application because the location was null.");
+                _iLoggerRpc.Error("Failed to register application because the location was null.");
                 return false;
             }
 
@@ -68,7 +68,7 @@ namespace DiscordRPC.Registry
                     commandKey.SetValue("", command);
             }
 
-            logger.Trace("Registered {0}, {1}, {2}", scheme, friendlyName, command);
+            _iLoggerRpc.Trace("Registered {0}, {1}, {2}", scheme, friendlyName, command);
         }
 
         /// <summary>
