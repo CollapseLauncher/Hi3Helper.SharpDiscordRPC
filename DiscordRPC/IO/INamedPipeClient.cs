@@ -11,7 +11,7 @@ namespace DiscordRPC.IO
         /// <summary>
         /// The logger for the Pipe client to use
         /// </summary>
-        ILogger Logger { get; set; }
+        ILoggerRpc ILoggerRpc { get; set; }
 
         /// <summary>
         /// Is the pipe client currently connected?

@@ -1,4 +1,4 @@
-﻿using DiscordRPC.Events;
+using DiscordRPC.Events;
 using DiscordRPC.Exceptions;
 using DiscordRPC.IO;
 using DiscordRPC.Logging;
@@ -7,6 +7,7 @@ using DiscordRPC.Registry;
 using DiscordRPC.RPC;
 using DiscordRPC.RPC.Commands;
 using DiscordRPC.RPC.Payload;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 
@@ -52,18 +53,18 @@ namespace DiscordRPC
         public bool IsDisposed { get; private set; }
 
         /// <summary>
-        /// The logger used this client and its associated components. <see cref="ILogger"/> are not called safely and can come from any thread. It is upto the <see cref="ILogger"/> to account for this and apply appropriate thread safe methods.
+        /// The logger used this client and its associated components. <see cref="ILoggerRpc"/> are not called safely and can come from any thread. It is upto the <see cref="ILoggerRpc"/> to account for this and apply appropriate thread safe methods.
         /// </summary>
-        public ILogger Logger
+        public ILoggerRpc ILoggerRpc
         {
-            get { return _logger; }
+            get { return _iLoggerRpc; }
             set
             {
-                this._logger = value;
-                if (connection != null) connection.Logger = value;
+                this._iLoggerRpc = value;
+                if (connection != null) connection.ILoggerRpc = value;
             }
         }
-        private ILogger _logger;
+        private ILoggerRpc _iLoggerRpc;
 
         /// <summary>
         /// Indicates if the client will automatically invoke the events without <see cref="Invoke"/> having to be called.
@@ -206,20 +207,31 @@ namespace DiscordRPC
         /// </summary>
         /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
         public DiscordRpcClient(string applicationID) : this(applicationID, -1) { }
+        
+        /// <summary>
+        /// Creates a new Discord RPC Client which can be used to send Rich Presence and receive Join / Spectate events.
+        /// </summary>
+        /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
+        /// <param name="logger">Microsoft's implementation of ILogger used to report messages.</param>
+        public DiscordRpcClient(string applicationID, ILogger logger) : this(applicationID, -1, new MsILoggerWrapper(logger)) { }
 
         /// <summary>
         /// Creates a new Discord RPC Client which can be used to send Rich Presence and receive Join / Spectate events. This constructor exposes more advance features such as custom NamedPipeClients and Loggers.
         /// </summary>
         /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
         /// <param name="pipe">The pipe to connect too. If -1, then the client will scan for the first available instance of Discord.</param>
-        /// <param name="logger">The logger used to report messages. If null, then a <see cref="NullLogger"/> will be created and logs will be ignored.</param>
+        /// <param name="logger">The logger used to report messages. If null, then a <see cref="NullILoggerRpc"/> will be created and logs will be ignored.</param>
         /// <param name="autoEvents">Should events be automatically invoked from the RPC Thread as they arrive from discord?</param>
         /// <param name="client">The pipe client to use and communicate to discord through. If null, the default <see cref="ManagedNamedPipeClient"/> will be used.</param>
-        public DiscordRpcClient(string applicationID, int pipe = -1, ILogger logger = null, bool autoEvents = true, INamedPipeClient client = null)
+        public DiscordRpcClient(string           applicationID, 
+                                int              pipe       = -1, 
+                                ILoggerRpc       logger = null, 
+                                bool             autoEvents = true,
+                                INamedPipeClient client     = null)
         {
             // Make sure appID is NOT null.
             if (string.IsNullOrEmpty(applicationID))
-                throw new ArgumentNullException("applicationID");
+                throw new ArgumentNullException(nameof(applicationID));
 
             // Store the properties
             ApplicationID = applicationID.Trim();
@@ -230,13 +242,13 @@ namespace DiscordRPC
             SkipIdenticalPresence = true;
 
             // Prepare the logger
-            _logger = logger ?? new NullLogger();
+            _iLoggerRpc = logger ?? new NullILoggerRpc();
 
             // Create the RPC client, giving it the important details
             connection = new RpcConnection(ApplicationID, ProcessID, TargetPipe, client ?? new ManagedNamedPipeClient(), autoEvents ? 0 : 128U)
             {
                 ShutdownOnly = _shutdownOnly,
-                Logger = _logger
+                ILoggerRpc = _iLoggerRpc
             };
 
             // Subscribe to its event
@@ -262,7 +274,7 @@ namespace DiscordRPC
         {
             if (AutoEvents)
             {
-                Logger.Error("Cannot Invoke client when AutomaticallyInvokeEvents has been set.");
+                ILoggerRpc.Error("Cannot Invoke client when AutomaticallyInvokeEvents has been set.");
                 return new IMessage[0];
                 // throw new InvalidOperationException("Cannot Invoke client when AutomaticallyInvokeEvents has been set.");
             }
@@ -335,7 +347,7 @@ namespace DiscordRPC
                         SynchronizeState();
                     }
 
-                    if (OnReady != null)
+                    if (OnReady != null) 
                         OnReady.Invoke(this, message as ReadyMessage);
 
                     break;
@@ -369,7 +381,7 @@ namespace DiscordRPC
                         Subscription |= sub.Event;
                     }
 
-                    if (OnSubscribe != null)
+                    if (OnSubscribe != null) 
                         OnSubscribe.Invoke(this, message as SubscribeMessage);
 
                     break;
@@ -408,7 +420,7 @@ namespace DiscordRPC
 
                 // We got a message we dont know what to do with.
                 default:
-                    Logger.Error("Message was queued with no appropriate handle! {0}", message.Type);
+                    ILoggerRpc.Error("Message was queued with no appropriate handle! {0}", message.Type);
                     break;
             }
         }
@@ -447,7 +459,7 @@ namespace DiscordRPC
                 throw new ObjectDisposedException("Connection", "Cannot initialize as the connection has been deinitialized");
 
             if (!IsInitialized)
-                Logger.Warning("The client is not yet initialized, storing the presence as a state instead.");
+                ILoggerRpc.Warning("The client is not yet initialized, storing the presence as a state instead.");
 
             // Send the event
             if (presence == null)
@@ -467,7 +479,7 @@ namespace DiscordRPC
                     throw new BadPresenceException("Presence maximum party size cannot be smaller than the current size.");
 
                 if (presence.HasSecrets() && !presence.HasParty())
-                    Logger.Warning("The presence has set the secrets but no buttons will show as there is no party available.");
+                    ILoggerRpc.Warning("The presence has set the secrets but no buttons will show as there is no party available.");
 
                 // Send the presence, but only if we are not skipping
                 if (!SkipIdenticalPresence || !presence.Matches(CurrentPresence))
@@ -484,37 +496,41 @@ namespace DiscordRPC
         #region Updates
 
         /// <summary>
-        /// Updates only the <see cref="RichPresence.Buttons"/> of the <see cref="CurrentPresence"/> and updates/removes the buttons. Returns the newly edited Rich Presence.
+        /// Updates the values assigned in the delegate passed
         /// </summary>
-        /// <param name="button">The buttons of the Rich Presence</param>
+        /// <param name="func">Delegate used to update the rich presence</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateButtons(Button[] button = null)
+        public RichPresence Update(Action<RichPresence> func)
         {
             if (!IsInitialized)
-            {
                 throw new UninitializedException();
-            }
 
             // Clone the presence
             RichPresence presence;
             lock (_sync)
             {
-                if (CurrentPresence == null)
-                {
-                    presence = new RichPresence();
-                }
-                else
-                {
-                    presence = CurrentPresence.Clone();
-                }
+                presence = CurrentPresence == null ? new RichPresence() : CurrentPresence.Clone();
             }
 
-            // Update the buttons.
-            presence.Buttons = button;
+            func(presence);
             SetPresence(presence);
 
             return presence;
         }
+
+        /// <summary>
+        /// Updates only the <see cref="BaseRichPresence.Type"/> of the <see cref="CurrentPresence"/> and sends the updated presence to Discord. Returns the newly edited Rich Presence.
+        /// </summary>
+        /// <param name="type">The type of the Rich Presence</param>
+        /// <returns>Updated Rich Presence</returns>
+        public RichPresence UpdateType(ActivityType type) => Update(p => p.Type = type);
+
+        /// <summary>
+        /// Updates only the <see cref="RichPresence.Buttons"/> of the <see cref="CurrentPresence"/> and updates/removes the buttons. Returns the newly edited Rich Presence.
+        /// </summary>
+        /// <param name="buttons">The buttons of the Rich Presence</param>
+        /// <returns>Updated Rich Presence</returns>
+        public RichPresence UpdateButtons(Button[] buttons = null) => Update(p => p.Buttons = buttons);
 
         /// <summary>
         /// Updates only the <see cref="RichPresence.Buttons"/> of the <see cref="CurrentPresence"/> and updates the button with the given index. Returns the newly edited Rich Presence.
@@ -522,131 +538,44 @@ namespace DiscordRPC
         /// <param name="button">The buttons of the Rich Presence</param>
         /// <param name="index">The number of the button</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence SetButton(Button button, int index = 0)
-        {
-            if (!IsInitialized)
-            {
-                throw new UninitializedException();
-            }
-
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null)
-                {
-                    presence = new RichPresence();
-                }
-                else
-                {
-                    presence = CurrentPresence.Clone();
-                }
-            }
-
-            // Update the buttons
-            presence.Buttons[index] = button;
-            SetPresence(presence);
-
-            return presence;
-        }
+        public RichPresence SetButton(Button button, int index = 0) => Update(p => p.Buttons[index] = button);
 
         /// <summary>
         /// Updates only the <see cref="BaseRichPresence.Details"/> of the <see cref="CurrentPresence"/> and sends the updated presence to Discord. Returns the newly edited Rich Presence.
         /// </summary>
         /// <param name="details">The details of the Rich Presence</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateDetails(string details)
-        {
-            if (!IsInitialized)
-                throw new UninitializedException();
+        public RichPresence UpdateDetails(string details) => Update(p => p.Details = details);
 
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Update the value
-            presence.Details = details;
-            SetPresence(presence);
-            return presence;
-        }
         /// <summary>
         /// Updates only the <see cref="BaseRichPresence.State"/> of the <see cref="CurrentPresence"/> and sends the updated presence to Discord. Returns the newly edited Rich Presence.
         /// </summary>
         /// <param name="state">The state of the Rich Presence</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateState(string state)
-        {
-            if (!IsInitialized)
-                throw new UninitializedException();
+        public RichPresence UpdateState(string state) => Update(p => p.State = state);
 
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Update the value
-            presence.State = state;
-            SetPresence(presence);
-            return presence;
-        }
         /// <summary>
         /// Updates only the <see cref="BaseRichPresence.Party"/> of the <see cref="CurrentPresence"/> and sends the updated presence to Discord. Returns the newly edited Rich Presence.
         /// </summary>
         /// <param name="party">The party of the Rich Presence</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateParty(Party party)
-        {
-            if (!IsInitialized)
-                throw new UninitializedException();
+        public RichPresence UpdateParty(Party party) => Update(p => p.Party = party);
 
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Update the value
-            presence.Party = party;
-            SetPresence(presence);
-            return presence;
-        }
         /// <summary>
         /// Updates the <see cref="Party.Size"/> of the <see cref="CurrentPresence"/> and sends the update presence to Discord. Returns the newly edited Rich Presence.
         /// <para>Will return null if no presence exists and will throw a new <see cref="NullReferenceException"/> if the Party does not exist.</para>
         /// </summary>
         /// <param name="size">The new size of the party. It cannot be greater than <see cref="Party.Max"/></param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdatePartySize(int size)
+        public RichPresence UpdatePartySize(int size) => Update(p =>
         {
-            if (!IsInitialized)
-                throw new UninitializedException();
-
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Ensure it has a party
-            if (presence.Party == null)
+            // Ensure we have a party going on
+            if (p.Party == null)
                 throw new BadPresenceException("Cannot set the size of the party if the party does not exist");
 
-            // Update the value
-            presence.Party.Size = size;
-            SetPresence(presence);
-            return presence;
-        }
+            // Update the size
+            p.Party.Size = size;
+        });
 
         /// <summary>
         /// Updates the <see cref="Party.Size"/> of the <see cref="CurrentPresence"/> and sends the update presence to Discord. Returns the newly edited Rich Presence.
@@ -655,29 +584,15 @@ namespace DiscordRPC
         /// <param name="size">The new size of the party. It cannot be greater than <see cref="Party.Max"/></param>
         /// <param name="max">The new size of the party. It cannot be smaller than <see cref="Party.Size"/></param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdatePartySize(int size, int max)
+        public RichPresence UpdatePartySize(int size, int max) => Update(p =>
         {
-            if (!IsInitialized)
-                throw new UninitializedException();
-
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Ensure it has a party
-            if (presence.Party == null)
+            // Ensure we have a party going on
+            if (p.Party == null)
                 throw new BadPresenceException("Cannot set the size of the party if the party does not exist");
 
-            // Update the value
-            presence.Party.Size = size;
-            presence.Party.Max = max;
-            SetPresence(presence);
-            return presence;
-        }
+            p.Party.Size = size;
+            p.Party.Max = max;
+        });
 
         /// <summary>
         /// Updates the large <see cref="Assets"/> of the <see cref="CurrentPresence"/> and sends the updated presence to Discord. Both <paramref name="key"/> and <paramref name="tooltip"/> are optional and will be ignored it null.
@@ -685,25 +600,14 @@ namespace DiscordRPC
         /// <param name="key">Optional: The new key to set the asset too</param>
         /// <param name="tooltip">Optional: The new tooltip to display on the asset</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateLargeAsset(string key = null, string tooltip = null)
+        public RichPresence UpdateLargeAsset(string key = null, string tooltip = null) => Update(p =>
         {
-            if (!IsInitialized)
-                throw new UninitializedException();
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
+            if (p.Assets == null)
+                p.Assets = new Assets();
 
-            // Update the value
-            if (presence.Assets == null) presence.Assets = new Assets();
-            presence.Assets.LargeImageKey = key ?? presence.Assets.LargeImageKey;
-            presence.Assets.LargeImageText = tooltip ?? presence.Assets.LargeImageText;
-            SetPresence(presence);
-            return presence;
-        }
+            p.Assets.LargeImageKey = key ?? p.Assets.LargeImageKey;
+            p.Assets.LargeImageText = tooltip ?? p.Assets.LargeImageText;
+        });
 
         /// <summary>
         /// Updates the small <see cref="Assets"/> of the <see cref="CurrentPresence"/> and sends the updated presence to Discord. Both <paramref name="key"/> and <paramref name="tooltip"/> are optional and will be ignored it null.
@@ -711,134 +615,66 @@ namespace DiscordRPC
         /// <param name="key">Optional: The new key to set the asset too</param>
         /// <param name="tooltip">Optional: The new tooltip to display on the asset</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateSmallAsset(string key = null, string tooltip = null)
+        public RichPresence UpdateSmallAsset(string key = null, string tooltip = null) => Update(p =>
         {
-            if (!IsInitialized)
-                throw new UninitializedException();
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
+            if (p.Assets == null)
+                p.Assets = new Assets();
 
-            // Update the value
-            if (presence.Assets == null) presence.Assets = new Assets();
-            presence.Assets.SmallImageKey = key ?? presence.Assets.SmallImageKey;
-            presence.Assets.SmallImageText = tooltip ?? presence.Assets.SmallImageText;
-            SetPresence(presence);
-            return presence;
-        }
+            p.Assets.SmallImageKey = key ?? p.Assets.SmallImageKey;
+            p.Assets.SmallImageText = tooltip ?? p.Assets.SmallImageText;
+        });
 
         /// <summary>
         /// Updates the <see cref="Secrets"/> of the <see cref="CurrentPresence"/> and sends the updated presence to Discord. Will override previous secret entirely.
         /// </summary>
         /// <param name="secrets">The new secret to send to discord.</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateSecrets(Secrets secrets)
-        {
-            if (!IsInitialized)
-                throw new UninitializedException();
-
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Update the value
-            presence.Secrets = secrets;
-            SetPresence(presence);
-            return presence;
-        }
+        public RichPresence UpdateSecrets(Secrets secrets) => Update(p => p.Secrets = secrets);
 
         /// <summary>
         /// Sets the start time of the <see cref="CurrentPresence"/> to now and sends the updated presence to Discord.
         /// </summary>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateStartTime() { return UpdateStartTime(DateTime.UtcNow); }
+        public RichPresence UpdateStartTime() => UpdateStartTime(DateTime.UtcNow);
 
         /// <summary>
         /// Sets the start time of the <see cref="CurrentPresence"/> and sends the updated presence to Discord.
         /// </summary>
         /// <param name="time">The new time for the start</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateStartTime(DateTime time)
+        public RichPresence UpdateStartTime(DateTime time) => Update(p =>
         {
-            if (!IsInitialized)
-                throw new UninitializedException();
+            if (p.Timestamps == null)
+                p.Timestamps = new Timestamps();
 
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Update the value
-            if (presence.Timestamps == null) presence.Timestamps = new Timestamps();
-            presence.Timestamps.Start = time;
-            SetPresence(presence);
-            return presence;
-        }
+            p.Timestamps.Start = time;
+        });
 
         /// <summary>
         /// Sets the end time of the <see cref="CurrentPresence"/> to now and sends the updated presence to Discord.
         /// </summary>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateEndTime() { return UpdateEndTime(DateTime.UtcNow); }
+        public RichPresence UpdateEndTime() => UpdateEndTime(DateTime.UtcNow);
 
         /// <summary>
         /// Sets the end time of the <see cref="CurrentPresence"/> and sends the updated presence to Discord.
         /// </summary>
         /// <param name="time">The new time for the end</param>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateEndTime(DateTime time)
+        public RichPresence UpdateEndTime(DateTime time) => Update(p =>
         {
-            if (!IsInitialized)
-                throw new UninitializedException();
+            if (p.Timestamps == null)
+                p.Timestamps = new Timestamps();
 
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Update the value
-            if (presence.Timestamps == null) presence.Timestamps = new Timestamps();
-            presence.Timestamps.End = time;
-            SetPresence(presence);
-            return presence;
-        }
+            p.Timestamps.End = time;
+        });
 
         /// <summary>
         /// Sets the start and end time of <see cref="CurrentPresence"/> to null and sends it to Discord.
         /// </summary>
         /// <returns>Updated Rich Presence</returns>
-        public RichPresence UpdateClearTime()
-        {
-            if (!IsInitialized)
-                throw new UninitializedException();
+        public RichPresence UpdateClearTime() => Update(p => p.Timestamps = null);
 
-            // Clone the presence
-            RichPresence presence;
-            lock (_sync)
-            {
-                if (CurrentPresence == null) { presence = new RichPresence(); }
-                else { presence = CurrentPresence.Clone(); }
-            }
-
-            // Update the value
-            presence.Timestamps = null;
-            SetPresence(presence);
-            return presence;
-        }
         #endregion
 
         /// <summary>
@@ -870,7 +706,7 @@ namespace DiscordRPC
         /// <returns></returns>
         public bool RegisterUriScheme(string steamAppID = null, string executable = null)
         {
-            var urischeme = new UriSchemeRegister(_logger, ApplicationID, steamAppID, executable);
+            var urischeme = new UriSchemeRegister(_iLoggerRpc, ApplicationID, steamAppID, executable);
             return HasRegisteredUriScheme = urischeme.RegisterUriScheme();
         }
 
@@ -903,7 +739,7 @@ namespace DiscordRPC
             }
             else
             {
-                Logger.Warning("Client has not yet initialized, but events are being subscribed too. Storing them as state instead.");
+                ILoggerRpc.Warning("Client has not yet initialized, but events are being subscribed too. Storing them as state instead.");
             }
 
             lock (_sync)

@@ -1,4 +1,4 @@
-﻿using DiscordRPC.Exceptions;
+using DiscordRPC.Exceptions;
 using DiscordRPC.Helper;
 using System;
 using System.Text;
@@ -78,6 +78,13 @@ namespace DiscordRPC
         [JsonPropertyName("secrets")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public Secrets Secrets { get; set; }
+
+        /// <summary>
+        /// The activity type
+        /// </summary>
+        [JsonPropertyName("type")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public ActivityType Type { get; set; }
 
         /// <summary>
         /// Marks the <see cref="Secrets.MatchSecret"/> as a game session with a specific beginning and end. It was going to be used as a form of notification, but was replaced with the join feature. It may potentially have use in the future, but it currently has no use.
@@ -175,7 +182,7 @@ namespace DiscordRPC
             if (other == null)
                 return false;
 
-            if (State != other.State || Details != other.Details)
+            if (State != other.State || Details != other.Details || Type != other.Type)
                 return false;
 
             // Checks if the timestamps are different
@@ -248,6 +255,7 @@ namespace DiscordRPC
             var presence = new RichPresence();
             presence.State = State;
             presence.Details = Details;
+            presence.Type = Type;
 
             presence.Party = !HasParty() ? Party : null;
             presence.Secrets = !HasSecrets() ? Secrets : null;
@@ -697,7 +705,7 @@ namespace DiscordRPC
             Private = 0,
 
             /// <summary>
-            /// THe party is public, anyone can join.
+            /// The party is public, anyone can join.
             /// </summary>
             Public = 1
         }
@@ -799,6 +807,30 @@ namespace DiscordRPC
     }
 
     /// <summary>
+    /// Rich Presence activity type
+    /// </summary>
+    public enum ActivityType
+    {
+        // Streaming (1) and Custom (4) are not supported via RPC
+        /// <summary>
+        /// Playing status type. Displays as "Playing ..."
+        /// </summary>
+        Playing = 0,
+        /// <summary>
+        /// Listening status type. Displays as "Listening to ..."
+        /// </summary>
+        Listening = 2,
+        /// <summary>
+        /// Watching status type. Displays as "Watching ..."
+        /// </summary>
+        Watching = 3,
+        /// <summary>
+        /// Competing status type. Displays as "Competing in ..."
+        /// </summary>
+        Competing = 5
+    }
+
+    /// <summary>
     /// The Rich Presence structure that will be sent and received by Discord. Use this class to build your presence and update it appropriately.
     /// </summary>
     // This is broken up in this way because the response inherits the BaseRichPresence.
@@ -841,6 +873,17 @@ namespace DiscordRPC
         public RichPresence WithDetails(string details)
         {
             Details = details;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the type of the Rich Presence. See also <seealso cref="ActivityType"/>.
+        /// </summary>
+        /// <param name="type">The status type</param>
+        /// <returns>The modified Rich Presence.</returns>
+        public RichPresence WithType(ActivityType type)
+        {
+            Type = type;
             return this;
         }
 
@@ -901,6 +944,7 @@ namespace DiscordRPC
             {
                 State = this._state != null ? _state.Clone() as string : null,
                 Details = this._details != null ? _details.Clone() as string : null,
+                Type = this.Type,
 
                 Buttons = !HasButtons() ? null : this.Buttons.Clone() as Button[],
                 Secrets = !HasSecrets() ? null : new Secrets
@@ -931,7 +975,6 @@ namespace DiscordRPC
                     Max = this.Party.Max,
                     Privacy = this.Party.Privacy,
                 },
-
             };
         }
 
@@ -944,6 +987,7 @@ namespace DiscordRPC
         {
             this._state = presence.State;
             this._details = presence.Details;
+            this.Type = presence.Type;
             this.Party = presence.Party;
             this.Timestamps = presence.Timestamps;
             this.Secrets = presence.Secrets;

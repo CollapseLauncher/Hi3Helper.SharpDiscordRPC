@@ -3,7 +3,7 @@
     /// <summary>
     /// Ignores all log events
     /// </summary>
-    public class NullLogger : ILogger
+    public class NullILoggerRpc : ILoggerRpc
     {
         /// <summary>
         /// The level of logging to apply to this logger.

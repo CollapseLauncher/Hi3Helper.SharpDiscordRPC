@@ -33,10 +33,10 @@ namespace DiscordRPC.Registry
         /// </summary>
         public string ExecutablePath { get; set; }
 
-        private ILogger _logger;
-        public UriSchemeRegister(ILogger logger, string applicationID, string steamAppID = null, string executable = null)
+        private ILoggerRpc _iLoggerRpc;
+        public UriSchemeRegister(ILoggerRpc iLoggerRpc, string applicationID, string steamAppID = null, string executable = null)
         {
-            _logger = logger;
+            _iLoggerRpc = iLoggerRpc;
             ApplicationID = applicationID.Trim();
             SteamAppID = steamAppID != null ? steamAppID.Trim() : null;
             ExecutablePath = executable ?? GetApplicationLocation();
@@ -55,8 +55,8 @@ namespace DiscordRPC.Registry
                 case PlatformID.Win32S:
                 case PlatformID.Win32NT:
                 case PlatformID.WinCE:
-                    _logger.Trace("Creating Windows Scheme Creator");
-                    creator = new WindowsUriSchemeCreator(_logger);
+                    _iLoggerRpc.Trace("Creating Windows Scheme Creator");
+                    creator = new WindowsUriSchemeCreator(_iLoggerRpc);
                     break;
 
                 case PlatformID.Unix:
@@ -69,8 +69,8 @@ namespace DiscordRPC.Registry
                     else
                     {
 #endif
-                        _logger.Trace("Creating Unix Scheme Creator");
-                        creator = new UnixUriSchemeCreator(_logger);
+                        _iLoggerRpc.Trace("Creating Unix Scheme Creator");
+                        creator = new UnixUriSchemeCreator(_iLoggerRpc);
 #if USE_RUNTIME_INFO
                     }
 #endif
@@ -78,20 +78,20 @@ namespace DiscordRPC.Registry
 
 #if !USE_RUNTIME_INFO
                 case PlatformID.MacOSX:
-                    _logger.Trace("Creating MacOSX Scheme Creator");
-                    creator = new MacUriSchemeCreator(_logger);
+                    _iLoggerRpc.Trace("Creating MacOSX Scheme Creator");
+                    creator = new MacUriSchemeCreator(_iLoggerRpc);
                     break;
 #endif
 
                 default:
-                    _logger.Error("Unknown Platform: {0}", Environment.OSVersion.Platform);
+                    _iLoggerRpc.Error("Unknown Platform: {0}", Environment.OSVersion.Platform);
                     throw new PlatformNotSupportedException("Platform does not support registration.");
             }
 
             // Register the app
             if (creator.RegisterUriScheme(this))
             {
-                _logger.Info("URI scheme registered.");
+                _iLoggerRpc.Info("URI scheme registered.");
                 return true;
             }
 

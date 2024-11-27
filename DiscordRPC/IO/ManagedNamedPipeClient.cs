@@ -20,7 +20,7 @@ namespace DiscordRPC.IO
         /// <summary>
         /// The logger for the Pipe client to use
         /// </summary>
-        public ILogger Logger { get; set; }
+        public ILoggerRpc ILoggerRpc { get; set; }
 
         /// <summary>
         /// Checks if the client is connected
@@ -63,7 +63,7 @@ namespace DiscordRPC.IO
         public ManagedNamedPipeClient()
         {
             _buffer = new byte[PipeFrame.MAX_SIZE];
-            Logger = new NullLogger();
+            ILoggerRpc = new NullILoggerRpc();
             _stream = null;
         }
 
@@ -74,7 +74,7 @@ namespace DiscordRPC.IO
         /// <returns></returns>
         public bool Connect(int pipe)
         {
-            Logger.Trace("ManagedNamedPipeClient.Connection({0})", pipe);
+            ILoggerRpc.Trace("ManagedNamedPipeClient.Connection({0})", pipe);
 
             if (_isDisposed)
                 throw new ObjectDisposedException("NamedPipe");
@@ -123,12 +123,12 @@ namespace DiscordRPC.IO
             string sandbox = isSandbox ? GetPipeSandbox() : "";
             if (isSandbox && sandbox == null)
             {
-                Logger.Trace("Skipping sandbox connection.");
+                ILoggerRpc.Trace("Skipping sandbox connection.");
                 return false;
             }
 
             // Prepare the pipename
-            Logger.Trace("Connection Attempt {0} ({1})", pipe, sandbox);
+            ILoggerRpc.Trace("Connection Attempt {0} ({1})", pipe, sandbox);
             string pipename = GetPipeName(pipe, sandbox);
 
             try
@@ -136,7 +136,7 @@ namespace DiscordRPC.IO
                 // Create the client
                 lock (l_stream)
                 {
-                    Logger.Info("Attempting to connect to '{0}'", pipename);
+                    ILoggerRpc.Info("Attempting to connect to '{0}'", pipename);
                     _stream = new NamedPipeClientStream(".", pipename, PipeDirection.InOut, PipeOptions.Asynchronous);
 
                     // Intentionally use a timeout of 0 here to avoid spinlock overhead.
@@ -144,12 +144,12 @@ namespace DiscordRPC.IO
                     _stream.Connect(0);
 
                     // Spin for a bit while we wait for it to finish connecting
-                    Logger.Trace("Waiting for connection...");
+                    ILoggerRpc.Trace("Waiting for connection...");
                     do { Thread.Sleep(10); } while (!_stream.IsConnected);
                 }
 
                 // Store the value
-                Logger.Info("Connected to '{0}'", pipename);
+                ILoggerRpc.Info("Connected to '{0}'", pipename);
                 _connectedPipe = pipe;
                 _isClosed = false;
             }
@@ -157,11 +157,11 @@ namespace DiscordRPC.IO
             {
                 // Something happened, try again
                 // TODO: Log the failure condition
-                Logger.Error("Failed connection to {0}. {1}", pipename, e.Message);
+                ILoggerRpc.Error("Failed connection to {0}. {1}", pipename, e.Message);
                 Close();
             }
 
-            Logger.Trace("Done. Result: {0}", _isClosed);
+            ILoggerRpc.Trace("Done. Result: {0}", _isClosed);
             return !_isClosed;
         }
 
@@ -178,25 +178,25 @@ namespace DiscordRPC.IO
                     // Make sure the stream is valid
                     if (_stream == null || !_stream.IsConnected) return;
 
-                    Logger.Trace("Beginning Read of {0} bytes", _buffer.Length);
+                    ILoggerRpc.Trace("Beginning Read of {0} bytes", _buffer.Length);
                     _stream.BeginRead(_buffer, 0, _buffer.Length, new AsyncCallback(EndReadStream), _stream.IsConnected);
                 }
             }
             catch (ObjectDisposedException)
             {
-                Logger.Warning("Attempted to start reading from a disposed pipe");
+                ILoggerRpc.Warning("Attempted to start reading from a disposed pipe");
                 return;
             }
             catch (InvalidOperationException)
             {
                 // The pipe has been closed
-                Logger.Warning("Attempted to start reading from a closed pipe");
+                ILoggerRpc.Warning("Attempted to start reading from a closed pipe");
                 return;
             }
             catch (Exception e)
             {
-                Logger.Error("An exception occured while starting to read a stream: {0}", e.Message);
-                Logger.Error(e.StackTrace);
+                ILoggerRpc.Error("An exception occured while starting to read a stream: {0}", e.Message);
+                ILoggerRpc.Error(e.StackTrace);
             }
         }
 
@@ -206,7 +206,7 @@ namespace DiscordRPC.IO
         /// <param name="callback"></param>
         private void EndReadStream(IAsyncResult callback)
         {
-            Logger.Trace("Ending Read");
+            ILoggerRpc.Trace("Ending Read");
             int bytes = 0;
 
             try
@@ -223,28 +223,28 @@ namespace DiscordRPC.IO
             }
             catch (IOException)
             {
-                Logger.Warning("Attempted to end reading from a closed pipe");
+                ILoggerRpc.Warning("Attempted to end reading from a closed pipe");
                 return;
             }
             catch (NullReferenceException)
             {
-                Logger.Warning("Attempted to read from a null pipe");
+                ILoggerRpc.Warning("Attempted to read from a null pipe");
                 return;
             }
             catch (ObjectDisposedException)
             {
-                Logger.Warning("Attempted to end reading from a disposed pipe");
+                ILoggerRpc.Warning("Attempted to end reading from a disposed pipe");
                 return;
             }
             catch (Exception e)
             {
-                Logger.Error("An exception occured while ending a read of a stream: {0}", e.Message);
-                Logger.Error(e.StackTrace);
+                ILoggerRpc.Error("An exception occured while ending a read of a stream: {0}", e.Message);
+                ILoggerRpc.Error(e.StackTrace);
                 return;
             }
 
             // How much did we read?
-            Logger.Trace("Read {0} bytes", bytes);
+            ILoggerRpc.Trace("Read {0} bytes", bytes);
 
             // Did we read anything? If we did we should enqueue it.
             if (bytes > 0)
@@ -257,7 +257,7 @@ namespace DiscordRPC.IO
                         PipeFrame frame = new PipeFrame();
                         if (frame.ReadStream(memory))
                         {
-                            Logger.Trace("Read a frame: {0}", frame.Opcode);
+                            ILoggerRpc.Trace("Read a frame: {0}", frame.Opcode);
 
                             // Enqueue the stream
                             lock (_framequeuelock)
@@ -266,13 +266,13 @@ namespace DiscordRPC.IO
                         else
                         {
                             // TODO: Enqueue a pipe close event here as we failed to read something.
-                            Logger.Error("Pipe failed to read from the data received by the stream.");
+                            ILoggerRpc.Error("Pipe failed to read from the data received by the stream.");
                             Close();
                         }
                     }
                     catch (Exception e)
                     {
-                        Logger.Error("A exception has occured while trying to parse the pipe data: {0}", e.Message);
+                        ILoggerRpc.Error("A exception has occured while trying to parse the pipe data: {0}", e.Message);
                         Close();
                     }
                 }
@@ -283,19 +283,19 @@ namespace DiscordRPC.IO
                 // I have added this check here just so the Windows builds are not effected and continue to work as expected.
                 if (IsUnix())
                 {
-                    Logger.Error("Empty frame was read on {0}, aborting.", Environment.OSVersion);
+                    ILoggerRpc.Error("Empty frame was read on {0}, aborting.", Environment.OSVersion);
                     Close();
                 }
                 else
                 {
-                    Logger.Warning("Empty frame was read. Please send report to Lachee.");
+                    ILoggerRpc.Warning("Empty frame was read. Please send report to Lachee.");
                 }
             }
 
             // We are still connected, so continue to read
             if (!_isClosed && IsConnected)
             {
-                Logger.Trace("Starting another read");
+                ILoggerRpc.Trace("Starting another read");
                 BeginReadStream();
             }
         }
@@ -339,7 +339,7 @@ namespace DiscordRPC.IO
             // Write the frame. We are assuming proper duplex connection here
             if (_isClosed || !IsConnected)
             {
-                Logger.Error("Failed to write frame because the stream is closed");
+                ILoggerRpc.Error("Failed to write frame because the stream is closed");
                 return false;
             }
 
@@ -352,15 +352,15 @@ namespace DiscordRPC.IO
             }
             catch (IOException io)
             {
-                Logger.Error("Failed to write frame because of a IO Exception: {0}", io.Message);
+                ILoggerRpc.Error("Failed to write frame because of a IO Exception: {0}", io.Message);
             }
             catch (ObjectDisposedException)
             {
-                Logger.Warning("Failed to write frame as the stream was already disposed");
+                ILoggerRpc.Warning("Failed to write frame as the stream was already disposed");
             }
             catch (InvalidOperationException)
             {
-                Logger.Warning("Failed to write frame because of a invalid operation");
+                ILoggerRpc.Warning("Failed to write frame because of a invalid operation");
             }
 
             // We must have failed the try catch
@@ -375,7 +375,7 @@ namespace DiscordRPC.IO
             // If we are already closed, just exit
             if (_isClosed)
             {
-                Logger.Warning("Tried to close a already closed pipe.");
+                ILoggerRpc.Warning("Tried to close a already closed pipe.");
                 return;
             }
 
@@ -406,14 +406,14 @@ namespace DiscordRPC.IO
                     else
                     {
                         // The stream is already null?
-                        Logger.Warning("Stream was closed, but no stream was available to begin with!");
+                        ILoggerRpc.Warning("Stream was closed, but no stream was available to begin with!");
                     }
                 }
             }
             catch (ObjectDisposedException)
             {
                 // ITs already been disposed
-                Logger.Warning("Tried to dispose already disposed stream");
+                ILoggerRpc.Warning("Tried to dispose already disposed stream");
             }
             finally
             {

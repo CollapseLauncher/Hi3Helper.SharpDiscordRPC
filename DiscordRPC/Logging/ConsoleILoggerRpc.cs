@@ -5,7 +5,7 @@ namespace DiscordRPC.Logging
     /// <summary>
     /// Logs the outputs to the console using <see cref="Console.WriteLine()"/>
     /// </summary>
-    public class ConsoleLogger : ILogger
+    public class ConsoleILoggerRpc : ILoggerRpc
     {
         /// <summary>
         /// The level of logging to apply to this logger.
@@ -29,7 +29,7 @@ namespace DiscordRPC.Logging
         /// <summary>
         /// Creates a new instance of a Console Logger.
         /// </summary>
-        public ConsoleLogger()
+        public ConsoleILoggerRpc()
         {
             this.Level = LogLevel.Info;
             Coloured = false;
@@ -39,7 +39,7 @@ namespace DiscordRPC.Logging
         /// Creates a new instance of a Console Logger
         /// </summary>
         /// <param name="level">The log level</param>
-        public ConsoleLogger(LogLevel level)
+        public ConsoleILoggerRpc(LogLevel level)
             : this()
         {
             Level = level;
@@ -50,7 +50,7 @@ namespace DiscordRPC.Logging
         /// </summary>
         /// <param name="level">The log level</param>
         /// <param name="coloured">Should the logs be in colour?</param>
-        public ConsoleLogger(LogLevel level, bool coloured)
+        public ConsoleILoggerRpc(LogLevel level, bool coloured)
         {
             Level = level;
             Coloured = coloured;

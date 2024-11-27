@@ -3,7 +3,7 @@
     /// <summary>
     /// Logs the outputs to a file
     /// </summary>
-    public class FileLogger : ILogger
+    public class FileILoggerRpc : ILoggerRpc
     {
         /// <summary>
         /// The level of logging to apply to this logger.
@@ -21,7 +21,7 @@
         /// Creates a new instance of the file logger
         /// </summary>
         /// <param name="path">The path of the log file.</param>
-        public FileLogger(string path)
+        public FileILoggerRpc(string path)
             : this(path, LogLevel.Info) { }
 
         /// <summary>
@@ -29,7 +29,7 @@
         /// </summary>
         /// <param name="path">The path of the log file.</param>
         /// <param name="level">The level to assign to the logger.</param>
-        public FileLogger(string path, LogLevel level)
+        public FileILoggerRpc(string path, LogLevel level)
         {
             Level = level;
             File = path;
