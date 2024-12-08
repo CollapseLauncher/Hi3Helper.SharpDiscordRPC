@@ -76,12 +76,12 @@ namespace DiscordRPC.RPC
         /// <summary>
         /// The configuration received by the Ready
         /// </summary>
-        public Configuration Configuration { get { Configuration tmp = null; lock (l_config) tmp = _configuration; return tmp; } }
-        private Configuration _configuration = null;
-        private readonly object l_config = new object();
+        public Configuration Configuration { get { Configuration tmp; lock (l_config) tmp = _configuration; return tmp; } }
+        private          Configuration _configuration;
+        private readonly object        l_config = new();
 
-        private volatile bool aborting = false;
-        private volatile bool shutdown = false;
+        private volatile bool aborting;
+        private volatile bool shutdown;
 
         /// <summary>
         /// Indicates if the RPC connection is still running in the background
@@ -237,7 +237,7 @@ namespace DiscordRPC.RPC
         /// Dequeues a single message from the event stack. Returns null if none are available.
         /// </summary>
         /// <returns></returns>
-        internal IMessage DequeueMessage()
+        internal IMessage? DequeueMessage()
         {
             // Logger.Trace("Deque Message");
             lock (l_rxqueue)
@@ -281,9 +281,9 @@ namespace DiscordRPC.RPC
             if (ILoggerRpc.Level <= LogLevel.Trace)
             {
                 ILoggerRpc.Trace("============================");
-                ILoggerRpc.Trace("Assembly:             " + Assembly.GetAssembly(typeof(RichPresence)).FullName);
+                ILoggerRpc.Trace("Assembly:             " + Assembly.GetAssembly(typeof(RichPresence))?.FullName);
                 ILoggerRpc.Trace("Pipe:                 " + namedPipe.GetType().FullName);
-                ILoggerRpc.Trace("Platform:             " + Environment.OSVersion.ToString());
+                ILoggerRpc.Trace("Platform:             " + Environment.OSVersion);
                 ILoggerRpc.Trace("applicationID:        " + applicationID);
                 ILoggerRpc.Trace("targetPipe:           " + targetPipe);
                 ILoggerRpc.Trace("POLL_RATE:            " + POLL_RATE);
@@ -376,7 +376,7 @@ namespace DiscordRPC.RPC
                                         }
 
                                         // We have a frame, so we are going to process the payload and add it to the stack
-                                        EventPayload response = null;
+                                        EventPayload? response = null;
                                         try { response = frame.GetObject<EventPayload>(); } catch (Exception e)
                                         {
                                             ILoggerRpc.Error("Failed to parse event! {0}", e.Message);
@@ -447,7 +447,7 @@ namespace DiscordRPC.RPC
                 finally
                 {
                     // Disconnect from the pipe because something bad has happened. An exception has been thrown or the main read loop has terminated.
-                    if (namedPipe.IsConnected)
+                    if (namedPipe is { IsConnected: true })
                     {
                         // Terminate the pipe
                         ILoggerRpc.Trace("Closing the named pipe.");
@@ -539,13 +539,17 @@ namespace DiscordRPC.RPC
                     case Command.SUBSCRIBE:
 
                         // Go through the data, looking for the evt property, casting it to a server event
-                        var evt = response.GetObject<EventPayload>().Event.Value;
+                        var serverEvent = response.GetObject<EventPayload>().Event;
+                        if (serverEvent != null)
+                        {
+                            var evt = serverEvent.Value;
 
-                        // Enqueue the appropriate message.
-                        if (response.Command == Command.SUBSCRIBE)
-                            EnqueueMessage(new SubscribeMessage(evt));
-                        else
-                            EnqueueMessage(new UnsubscribeMessage(evt));
+                            // Enqueue the appropriate message.
+                            if (response.Command == Command.SUBSCRIBE)
+                                EnqueueMessage(new SubscribeMessage(evt));
+                            else
+                                EnqueueMessage(new UnsubscribeMessage(evt));
+                        }
 
                         break;
 
@@ -615,8 +619,8 @@ namespace DiscordRPC.RPC
                 ILoggerRpc.Warning("We have been told to write a queue but we have also been aborted.");
 
             // Prepare some variables we will clone into with locks
-            bool needsWriting = true;
-            ICommand item = null;
+            bool      needsWriting = true;
+            ICommand? item;
 
             // Continue looping until we dont need anymore messages
             while (needsWriting && namedPipe.IsConnected)
@@ -739,7 +743,6 @@ namespace DiscordRPC.RPC
             if (!namedPipe.WriteFrame(new PipeFrame(Opcode.Close, new Handshake() { Version = VERSION, ClientID = applicationID })))
             {
                 ILoggerRpc.Error("failed to write a handwave.");
-                return;
             }
         }
 
