@@ -489,12 +489,23 @@ namespace DiscordRPC.IO
         /// <returns></returns>
         private static string GetTemporaryDirectory()
         {
-            string temp = null;
-            temp = temp ?? Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
-            temp = temp ?? Environment.GetEnvironmentVariable("TMPDIR");
-            temp = temp ?? Environment.GetEnvironmentVariable("TMP");
-            temp = temp ?? Environment.GetEnvironmentVariable("TEMP");
-            temp = temp ?? "/tmp";
+            string temp = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            if (string.IsNullOrEmpty(temp))
+            {
+                temp = Environment.GetEnvironmentVariable("TMPDIR");
+                if (string.IsNullOrEmpty(temp))
+                {
+                    temp = Environment.GetEnvironmentVariable("TMP");
+                    if (string.IsNullOrEmpty(temp))
+                    {
+                        temp = Environment.GetEnvironmentVariable("TEMP");
+                        if (string.IsNullOrEmpty(temp))
+                        {
+                            temp = "/tmp";
+                        }
+                    }
+                }
+            }
             return temp;
         }
 
