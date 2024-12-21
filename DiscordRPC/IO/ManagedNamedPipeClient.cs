@@ -207,7 +207,7 @@ namespace DiscordRPC.IO
         private void EndReadStream(IAsyncResult callback)
         {
             ILoggerRpc.Trace("Ending Read");
-            int bytes = 0;
+            int bytes;
 
             try
             {
