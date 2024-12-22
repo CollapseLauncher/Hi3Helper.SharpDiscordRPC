@@ -14,7 +14,9 @@ namespace DiscordRPC.Logging
 
         public void Trace(string message, params object[] args)
         {
+#if DEBUG
             logger.LogTrace(FormatMessage(message, args));
+#endif
         }
 
         public void Info(string message, params object[] args)
