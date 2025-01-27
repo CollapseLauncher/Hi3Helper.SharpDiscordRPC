@@ -4,6 +4,8 @@ using System;
 using System.Text;
 using System.Text.Json.Serialization;
 // ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable UnusedMember.Local
+// ReSharper disable InconsistentNaming
 
 namespace DiscordRPC
 {
