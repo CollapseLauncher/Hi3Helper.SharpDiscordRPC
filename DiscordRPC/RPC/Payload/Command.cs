@@ -34,7 +34,7 @@ namespace DiscordRPC.RPC.Payload
 
         /// <summary>
         /// Used to reject join requests.
-        /// </summary
+        /// </summary>
         CLOSE_ACTIVITY_JOIN_REQUEST,
 
         /// <summary>

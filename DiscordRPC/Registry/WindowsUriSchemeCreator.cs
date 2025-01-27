@@ -58,14 +58,14 @@ namespace DiscordRPC.Registry
         {
             using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($"SOFTWARE\\Classes\\{scheme}"))
             {
-                key.SetValue("", $"URL:{friendlyName}");
-                key.SetValue("URL Protocol", "");
+                key?.SetValue("", $"URL:{friendlyName}");
+                key?.SetValue("URL Protocol", "");
 
-                using (var iconKey = key.CreateSubKey("DefaultIcon"))
-                    iconKey.SetValue("", defaultIcon);
+                using (var iconKey = key?.CreateSubKey("DefaultIcon"))
+                    iconKey?.SetValue("", defaultIcon);
 
-                using (var commandKey = key.CreateSubKey("shell\\open\\command"))
-                    commandKey.SetValue("", command);
+                using (var commandKey = key?.CreateSubKey("shell\\open\\command"))
+                    commandKey?.SetValue("", command);
             }
 
             _iLoggerRpc.Trace("Registered {0}, {1}, {2}", scheme, friendlyName, command);

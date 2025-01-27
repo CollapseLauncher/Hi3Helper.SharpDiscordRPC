@@ -30,7 +30,7 @@ namespace DiscordRPC.Registry
             }
 
             // Prepare the command
-            string command = null;
+            string command;
             if (register.UsingSteamApp)
             {
                 // A steam command instead
@@ -86,10 +86,10 @@ MimeType=x-scheme-handler/discord-{2}";
 
             // Run the process and wait for response
             Process process = Process.Start("xdg-mime", arguments);
-            process.WaitForExit();
+            process?.WaitForExit();
 
             // Return if successful
-            return process.ExitCode >= 0;
+            return process?.ExitCode >= 0;
         }
     }
 }

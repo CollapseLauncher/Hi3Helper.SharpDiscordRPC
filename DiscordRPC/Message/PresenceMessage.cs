@@ -21,7 +21,7 @@
             }
             else
             {
-                Presence = (BaseRichPresence)rpr;
+                Presence = rpr;
                 Name = rpr.Name;
                 ApplicationID = rpr.ClientID;
             }

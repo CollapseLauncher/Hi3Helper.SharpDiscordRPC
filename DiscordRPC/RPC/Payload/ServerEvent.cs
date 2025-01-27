@@ -16,7 +16,7 @@ namespace DiscordRPC.RPC.Payload
 
         /// <summary>
         /// Sent when something bad has happened
-        /// </summary
+        /// </summary>
         ERROR,
 
         /// <summary>

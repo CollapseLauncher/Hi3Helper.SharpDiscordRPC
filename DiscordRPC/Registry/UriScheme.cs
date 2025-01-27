@@ -48,7 +48,7 @@ namespace DiscordRPC.Registry
         public bool RegisterUriScheme()
         {
             // Get the creator
-            IUriSchemeCreator creator = null;
+            IUriSchemeCreator creator;
             switch(Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32Windows:
@@ -104,7 +104,7 @@ namespace DiscordRPC.Registry
         /// <returns></returns>
         public static string GetApplicationLocation()
         {
-            return Process.GetCurrentProcess().MainModule.FileName;
+            return Process.GetCurrentProcess().MainModule?.FileName;
         }
     }
 }

@@ -10,6 +10,10 @@ using DiscordRPC.RPC.Payload;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable UnusedMember.Global
+// ReSharper disable AutoPropertyCanBeMadeGetOnly.Local
+// ReSharper disable IdentifierTypo
 
 namespace DiscordRPC
 {
@@ -377,8 +381,8 @@ namespace DiscordRPC
                 case MessageType.Subscribe:
                     lock (_sync)
                     {
-                        var sub = message as SubscribeMessage;
-                        Subscription |= sub.Event;
+                        if (message is SubscribeMessage sub)
+                            Subscription |= sub.Event;
                     }
 
                     if (OnSubscribe != null) 
@@ -389,8 +393,8 @@ namespace DiscordRPC
                 case MessageType.Unsubscribe:
                     lock (_sync)
                     {
-                        var unsub = message as UnsubscribeMessage;
-                        Subscription &= ~unsub.Event;
+                        if (message is UnsubscribeMessage unsub)
+                            Subscription &= ~unsub.Event;
                     }
 
                     if (OnUnsubscribe != null)
@@ -443,7 +447,7 @@ namespace DiscordRPC
             if (!IsInitialized)
                 throw new UninitializedException();
 
-            connection.EnqueueCommand(new RespondCommand() { Accept = acceptRequest, UserID = request.User.ID.ToString() });
+            connection.EnqueueCommand(new RespondCommand { Accept = acceptRequest, UserID = request.User.ID.ToString() });
         }
 
         /// <summary>
@@ -466,7 +470,7 @@ namespace DiscordRPC
             {
                 // Clear the presence
                 if (!SkipIdenticalPresence || CurrentPresence != null)
-                    connection.EnqueueCommand(new PresenceCommand() { PID = this.ProcessID, Presence = null });
+                    connection.EnqueueCommand(new PresenceCommand { PID = this.ProcessID, Presence = null });
             }
             else
             {
@@ -483,7 +487,7 @@ namespace DiscordRPC
 
                 // Send the presence, but only if we are not skipping
                 if (!SkipIdenticalPresence || !presence.Matches(CurrentPresence))
-                    connection.EnqueueCommand(new PresenceCommand() { PID = this.ProcessID, Presence = presence.Clone() });
+                    connection.EnqueueCommand(new PresenceCommand { PID = this.ProcessID, Presence = presence.Clone() });
             }
 
             // Update our local store
@@ -775,13 +779,13 @@ namespace DiscordRPC
 
             // Add the subscribe command to be sent when the connection is able too
             if ((type & EventType.Spectate) == EventType.Spectate)
-                connection.EnqueueCommand(new SubscribeCommand() { Event = ServerEvent.ACTIVITY_SPECTATE, IsUnsubscribe = isUnsubscribe });
+                connection.EnqueueCommand(new SubscribeCommand { Event = ServerEvent.ACTIVITY_SPECTATE, IsUnsubscribe = isUnsubscribe });
 
             if ((type & EventType.Join) == EventType.Join)
-                connection.EnqueueCommand(new SubscribeCommand() { Event = ServerEvent.ACTIVITY_JOIN, IsUnsubscribe = isUnsubscribe });
+                connection.EnqueueCommand(new SubscribeCommand { Event = ServerEvent.ACTIVITY_JOIN, IsUnsubscribe = isUnsubscribe });
 
             if ((type & EventType.JoinRequest) == EventType.JoinRequest)
-                connection.EnqueueCommand(new SubscribeCommand() { Event = ServerEvent.ACTIVITY_JOIN_REQUEST, IsUnsubscribe = isUnsubscribe });
+                connection.EnqueueCommand(new SubscribeCommand { Event = ServerEvent.ACTIVITY_JOIN_REQUEST, IsUnsubscribe = isUnsubscribe });
         }
 
         #endregion

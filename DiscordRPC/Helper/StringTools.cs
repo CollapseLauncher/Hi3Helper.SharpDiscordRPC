@@ -65,7 +65,7 @@ namespace DiscordRPC.Helper
         public static string ToSnakeCase(this string str)
         {
             if (str == null) return null;
-            var concat = string.Concat(str.Select((x, i) => i > 0 && char.IsUpper(x) ? "_" + x.ToString() : x.ToString()).ToArray());
+            var concat = string.Concat(str.Select((x, i) => i > 0 && char.IsUpper(x) ? "_" + x : x.ToString()).ToArray());
             return concat.ToUpperInvariant();
         }
     }

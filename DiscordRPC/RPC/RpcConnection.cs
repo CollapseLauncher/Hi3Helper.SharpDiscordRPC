@@ -314,7 +314,7 @@ namespace DiscordRPC.RPC
                         #region Connected
                         // We connected to a pipe! Reset the delay
                         ILoggerRpc.Trace("Connected to the pipe. Attempting to establish handshake...");
-                        EnqueueMessage(new ConnectionEstablishedMessage() { ConnectedPipe = namedPipe.ConnectedPipe });
+                        EnqueueMessage(new ConnectionEstablishedMessage { ConnectedPipe = namedPipe.ConnectedPipe });
 
                         // Attempt to establish a handshake
                         EstablishHandshake();
@@ -343,7 +343,7 @@ namespace DiscordRPC.RPC
 
                                         ClosePayload close = frame.GetObject<ClosePayload>();
                                         ILoggerRpc.Warning("We have been told to terminate by discord: ({0}) {1}", close.Code, close.Reason);
-                                        EnqueueMessage(new CloseMessage() { Code = close.Code, Reason = close.Reason });
+                                        EnqueueMessage(new CloseMessage { Code = close.Code, Reason = close.Reason });
                                         mainloop = false;
                                         break;
 
@@ -420,7 +420,7 @@ namespace DiscordRPC.RPC
                     else
                     {
                         ILoggerRpc.Error("Failed to connect for some reason.");
-                        EnqueueMessage(new ConnectionFailedMessage() { FailedPipe = targetPipe });
+                        EnqueueMessage(new ConnectionFailedMessage { FailedPipe = targetPipe });
                     }
 
                     // If we are not aborting, we have to wait a bit before trying to connect again
@@ -659,33 +659,31 @@ namespace DiscordRPC.RPC
                     // Stop sending any more messages
                     return;
                 }
+
+                if (aborting)
+                {
+                    // We are aborting, so just dequeue the message and dont bother sending it
+                    ILoggerRpc.Warning("- skipping frame because of abort.");
+                    lock (l_rtqueue) _rtqueue.Dequeue();
+                }
                 else
                 {
-                    if (aborting)
+                    // Prepare the frame
+                    frame.SetObject(Opcode.Frame, payload);
+
+                    // Write it and if it wrote perfectly fine, we will dequeue it
+                    ILoggerRpc.Trace("Sending payload: {0}", payload.Command);
+                    if (namedPipe.WriteFrame(frame))
                     {
-                        // We are aborting, so just dequeue the message and dont bother sending it
-                        ILoggerRpc.Warning("- skipping frame because of abort.");
+                        // We sent it, so now dequeue it
+                        ILoggerRpc.Trace("Sent Successfully.");
                         lock (l_rtqueue) _rtqueue.Dequeue();
                     }
                     else
                     {
-                        // Prepare the frame
-                        frame.SetObject(Opcode.Frame, payload);
-
-                        // Write it and if it wrote perfectly fine, we will dequeue it
-                        ILoggerRpc.Trace("Sending payload: {0}", payload.Command);
-                        if (namedPipe.WriteFrame(frame))
-                        {
-                            // We sent it, so now dequeue it
-                            ILoggerRpc.Trace("Sent Successfully.");
-                            lock (l_rtqueue) _rtqueue.Dequeue();
-                        }
-                        else
-                        {
-                            // Something went wrong, so just give up and wait for the next time around.
-                            ILoggerRpc.Warning("Something went wrong during writing!");
-                            return;
-                        }
+                        // Something went wrong, so just give up and wait for the next time around.
+                        ILoggerRpc.Warning("Something went wrong during writing!");
+                        return;
                     }
                 }
             }
@@ -715,7 +713,7 @@ namespace DiscordRPC.RPC
 
             // Send it off to the server
             ILoggerRpc.Trace("Sending Handshake...");
-            if (!namedPipe.WriteFrame(new PipeFrame(Opcode.Handshake, new Handshake() { Version = VERSION, ClientID = applicationID })))
+            if (!namedPipe.WriteFrame(new PipeFrame(Opcode.Handshake, new Handshake { Version = VERSION, ClientID = applicationID })))
             {
                 ILoggerRpc.Error("Failed to write a handshake.");
                 return;
@@ -740,7 +738,7 @@ namespace DiscordRPC.RPC
             }
 
             // Send the handwave
-            if (!namedPipe.WriteFrame(new PipeFrame(Opcode.Close, new Handshake() { Version = VERSION, ClientID = applicationID })))
+            if (!namedPipe.WriteFrame(new PipeFrame(Opcode.Close, new Handshake { Version = VERSION, ClientID = applicationID })))
             {
                 ILoggerRpc.Error("failed to write a handwave.");
             }
@@ -810,7 +808,7 @@ namespace DiscordRPC.RPC
             lock(l_rtqueue)
             {
                 _rtqueue.Clear();
-                if (CLEAR_ON_SHUTDOWN) _rtqueue.Enqueue(new PresenceCommand() { PID = processID, Presence = null });
+                if (CLEAR_ON_SHUTDOWN) _rtqueue.Enqueue(new PresenceCommand { PID = processID, Presence = null });
                 _rtqueue.Enqueue(new CloseCommand());
             }
 

@@ -15,7 +15,7 @@ namespace DiscordRPC.IO
         /// <summary>
         /// Name format of the pipe
         /// </summary>
-        const string PIPE_NAME = @"discord-ipc-{0}";
+        const string PIPE_NAME = "discord-ipc-{0}";
 
         /// <summary>
         /// The logger for the Pipe client to use
@@ -47,7 +47,7 @@ namespace DiscordRPC.IO
         private int _connectedPipe;
         private NamedPipeClientStream _stream;
 
-        private byte[] _buffer = new byte[PipeFrame.MAX_SIZE];
+        private readonly byte[] _buffer;
 
         private Queue<PipeFrame> _framequeue = new Queue<PipeFrame>();
         private object _framequeuelock = new object();
@@ -176,22 +176,20 @@ namespace DiscordRPC.IO
                 lock (l_stream)
                 {
                     // Make sure the stream is valid
-                    if (_stream == null || !_stream.IsConnected) return;
+                    if (_stream is not { IsConnected: true }) return;
 
                     ILoggerRpc.Trace("Beginning Read of {0} bytes", _buffer.Length);
-                    _stream.BeginRead(_buffer, 0, _buffer.Length, new AsyncCallback(EndReadStream), _stream.IsConnected);
+                    _stream.BeginRead(_buffer, 0, _buffer.Length, EndReadStream, _stream.IsConnected);
                 }
             }
             catch (ObjectDisposedException)
             {
                 ILoggerRpc.Warning("Attempted to start reading from a disposed pipe");
-                return;
             }
             catch (InvalidOperationException)
             {
                 // The pipe has been closed
                 ILoggerRpc.Warning("Attempted to start reading from a closed pipe");
-                return;
             }
             catch (Exception e)
             {
@@ -215,7 +213,7 @@ namespace DiscordRPC.IO
                 lock (l_stream)
                 {
                     // Make sure the stream is still valid
-                    if (_stream == null || !_stream.IsConnected) return;
+                    if (_stream is not { IsConnected: true }) return;
 
                     // Read our bytes
                     bytes = _stream.EndRead(callback);

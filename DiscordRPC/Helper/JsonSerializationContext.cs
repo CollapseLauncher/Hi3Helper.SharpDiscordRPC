@@ -41,5 +41,5 @@ namespace DiscordRPC.Helper
     /* Rich Presence Context */
         JsonSerializable(typeof(RichPresenceResponse)),
     ]
-    internal partial class JsonSerializationContext : JsonSerializerContext { }
+    internal partial class JsonSerializationContext : JsonSerializerContext;
 }

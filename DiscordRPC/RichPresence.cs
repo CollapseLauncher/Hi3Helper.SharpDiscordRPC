@@ -3,6 +3,7 @@ using DiscordRPC.Helper;
 using System;
 using System.Text;
 using System.Text.Json.Serialization;
+// ReSharper disable UnusedAutoPropertyAccessor.Local
 
 namespace DiscordRPC
 {
@@ -262,7 +263,7 @@ namespace DiscordRPC
 
             if (HasAssets())
             {
-                presence.Assets = new Assets()
+                presence.Assets = new Assets
                 {
                     SmallImageKey = Assets.SmallImageKey,
                     SmallImageText = Assets.SmallImageText,
@@ -578,7 +579,7 @@ namespace DiscordRPC
         /// <returns>Returns a new timestamp with given duration.</returns>
         public static Timestamps FromTimeSpan(TimeSpan timespan)
         {
-            return new Timestamps()
+            return new Timestamps
             {
                 Start = DateTime.UtcNow,
                 End = DateTime.UtcNow + timespan
@@ -636,12 +637,12 @@ namespace DiscordRPC
         {
             get
             {
-                return Start.HasValue ? ToUnixMilliseconds(Start.Value) : (ulong?)null;
+                return Start.HasValue ? ToUnixMilliseconds(Start.Value) : null;
             }
 
             set
             {
-                Start = value.HasValue ? FromUnixMilliseconds(value.Value) : (DateTime?)null;
+                Start = value.HasValue ? FromUnixMilliseconds(value.Value) : null;
             }
         }
 
@@ -655,12 +656,12 @@ namespace DiscordRPC
         {
             get
             {
-                return End.HasValue ? ToUnixMilliseconds(End.Value) : (ulong?)null;
+                return End.HasValue ? ToUnixMilliseconds(End.Value) : null;
             }
 
             set
             {
-                End = value.HasValue ? FromUnixMilliseconds(value.Value) : (DateTime?)null;
+                End = value.HasValue ? FromUnixMilliseconds(value.Value) : null;
             }
         }
 
@@ -744,8 +745,8 @@ namespace DiscordRPC
             get
             {
                 // see issue https://github.com/discordapp/discord-rpc/issues/111
-                int size = Math.Max(1, Size);
-                return new int[] { size, Math.Max(size, Max) };
+                int size = Math.Max(1,              Size);
+                return [size, Math.Max(size, Max)];
             }
 
             set
@@ -1024,7 +1025,7 @@ namespace DiscordRPC
             if (Buttons == null ^ other.Buttons == null) return false;
             if (Buttons != null)
             {
-                if (Buttons.Length != other.Buttons.Length) return false;
+                if (Buttons.Length != other.Buttons?.Length) return false;
                 for (int i = 0; i < Buttons.Length; i++)
                 {
                     var a = Buttons[i];
