@@ -1,9 +1,12 @@
-﻿using System.Text.Json.Serialization;
+﻿// ReSharper disable UnusedAutoPropertyAccessor.Global
+// ReSharper disable UnusedMember.Global
+
+using System.Text.Json.Serialization;
 
 namespace DiscordRPC.Message
 {
     /// <summary>
-    /// Created when a error occurs within the ipc and it is sent to the client.
+    /// Created when an error occurs within the ipc, and it is sent to the client.
     /// </summary>
     public class ErrorMessage : IMessage
     {

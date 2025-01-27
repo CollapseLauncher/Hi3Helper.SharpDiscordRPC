@@ -1,66 +1,56 @@
 ﻿using System;
+// ReSharper disable UnusedMember.Global
+// ReSharper disable UnusedAutoPropertyAccessor.Global
 
 namespace DiscordRPC.Helper
 {
-    internal class BackoffDelay
+    internal class BackoffDelay(int min, int max, Random random)
     {
         /// <summary>
         /// The maximum time the backoff can reach
         /// </summary>
-        public int Maximum { get; private set; }
+        public int Maximum { get; } = max;
 
         /// <summary>
         /// The minimum time the backoff can start at
         /// </summary>
-        public int Minimum { get; private set; }
+        public int Minimum { get; } = min;
 
         /// <summary>
         /// The current time of the backoff
         /// </summary>
-        public int Current { get { return _current; } }
-        private int _current;
+        public int Current { get; private set; } = min;
 
         /// <summary>
         /// The current number of failures
         /// </summary>
-        public int Fails { get { return _fails; } }
-        private int _fails;
+        public int Fails { get; private set; } = 0;
 
         /// <summary>
         /// The random generator
         /// </summary>
-        public Random Random { get; set; }
+        public Random Random { get; set; } = random;
 
-        private BackoffDelay() { }
         public BackoffDelay(int min, int max) : this(min, max, new Random()) { }
-        public BackoffDelay(int min, int max, Random random)
-        {
-            this.Minimum = min;
-            this.Maximum = max;
-
-            this._current = min;
-            this._fails = 0;
-            this.Random = random;
-        }
 
         /// <summary>
         /// Resets the backoff
         /// </summary>
         public void Reset()
         {
-            _fails = 0;
-            _current = Minimum;
+            Fails = 0;
+            Current = Minimum;
         }
 
         public int NextDelay()
         {
             // Increment the failures
-            _fails++;
+            Fails++;
 
             double diff = (Maximum - Minimum) / 100f;
-            _current = (int)Math.Floor(diff * _fails) + Minimum;
+            Current = (int)Math.Floor(diff * Fails) + Minimum;
 
-            return Math.Min(Math.Max(_current, Minimum), Maximum);
+            return Math.Min(Math.Max(Current, Minimum), Maximum);
         }
     }
 }

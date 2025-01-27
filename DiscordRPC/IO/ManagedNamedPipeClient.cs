@@ -34,7 +34,7 @@ namespace DiscordRPC.IO
                 lock (l_stream)
                 {
                     // We cannot be sure its still connected, so lets double check
-                    return _stream != null && _stream.IsConnected;
+                    return _stream is { IsConnected: true };
                 }
             }
         }
@@ -42,9 +42,8 @@ namespace DiscordRPC.IO
         /// <summary>
         /// The pipe we are currently connected too.
         /// </summary>
-        public int ConnectedPipe { get { return _connectedPipe; } }
+        public int ConnectedPipe { get; private set; }
 
-        private int _connectedPipe;
         private NamedPipeClientStream _stream;
 
         private readonly byte[] _buffer;
@@ -150,7 +149,7 @@ namespace DiscordRPC.IO
 
                 // Store the value
                 ILoggerRpc.Info("Connected to '{0}'", pipename);
-                _connectedPipe = pipe;
+                ConnectedPipe = pipe;
                 _isClosed = false;
             }
             catch (Exception e)
@@ -417,7 +416,7 @@ namespace DiscordRPC.IO
             {
                 // For good measures, we will mark the pipe as closed anyways
                 _isClosed = true;
-                _connectedPipe = -1;
+                ConnectedPipe = -1;
             }
         }
 

@@ -15,15 +15,14 @@ namespace DiscordRPC.Message
         /// <summary>
         /// The time the message was created
         /// </summary>
-        public DateTime TimeCreated { get { return _timecreated; } }
-        private DateTime _timecreated;
+        public DateTime TimeCreated { get; }
 
         /// <summary>
         /// Creates a new instance of the message
         /// </summary>
         public IMessage()
         {
-            _timecreated = DateTime.Now;
+            TimeCreated = DateTime.Now;
         }
     }
 }

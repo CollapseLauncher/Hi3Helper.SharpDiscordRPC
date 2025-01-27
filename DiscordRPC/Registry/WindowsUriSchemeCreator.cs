@@ -8,7 +8,7 @@ namespace DiscordRPC.Registry
         private ILoggerRpc _iLoggerRpc;
         public WindowsUriSchemeCreator(ILoggerRpc iLoggerRpc)
         {
-            this._iLoggerRpc = iLoggerRpc;
+            _iLoggerRpc = iLoggerRpc;
         }
 
         public bool RegisterUriScheme(UriSchemeRegister register)

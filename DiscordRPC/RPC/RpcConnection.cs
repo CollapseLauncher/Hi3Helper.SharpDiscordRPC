@@ -142,8 +142,8 @@ namespace DiscordRPC.RPC
             this.applicationID = applicationID;
             this.processID = processID;
             this.targetPipe = targetPipe;
-            this.namedPipe = client;
-            this.ShutdownOnly = true;
+            namedPipe = client;
+            ShutdownOnly = true;
 
             // Assign a default logger
             ILoggerRpc = logger ?? new ConsoleILoggerRpc();
@@ -323,14 +323,13 @@ namespace DiscordRPC.RPC
                         // Continuously iterate, waiting for the frame
                         // We want to only stop reading if the inside tells us (mainloop), if we are aborting (abort) or the pipe disconnects
                         // We dont want to exit on a shutdown, as we still have information
-                        PipeFrame frame;
                         bool mainloop = true;
                         while (mainloop && !aborting && !shutdown && namedPipe.IsConnected)
                         {
                             #region Read Loop
 
                             // Iterate over every frame we have queued up, processing its contents
-                            if (namedPipe.ReadFrame(out frame))
+                            if (namedPipe.ReadFrame(out PipeFrame frame))
                             {
                                 #region Read Payload
                                 ILoggerRpc.Trace("Read Payload: {0}", frame.Opcode);
@@ -476,7 +475,7 @@ namespace DiscordRPC.RPC
             ILoggerRpc.Info("Handling Response. Cmd: {0}, Event: {1}", response.Command, response.Event);
 
             // Check if it is an error
-            if (response.Event.HasValue && response.Event.Value == ServerEvent.ERROR)
+            if (response.Event is ServerEvent.ERROR)
             {
                 // We have an error
                 ILoggerRpc.Error("Error received from the RPC");
@@ -493,7 +492,7 @@ namespace DiscordRPC.RPC
             // Check if its a handshake
             if (State == RpcState.Connecting)
             {
-                if (response.Command == Command.DISPATCH && response.Event.HasValue && response.Event.Value == ServerEvent.READY)
+                if (response is { Command: Command.DISPATCH, Event: ServerEvent.READY })
                 {
                     ILoggerRpc.Info("Connection established with the RPC");
                     SetConnectionState(RpcState.Connected);
@@ -773,9 +772,11 @@ namespace DiscordRPC.RPC
             }
 
             // Start the thread up
-            thread = new Thread(MainLoop);
-            thread.Name = "Discord IPC Thread";
-            thread.IsBackground = true;
+            thread              = new Thread(MainLoop)
+            {
+                Name         = "Discord IPC Thread",
+                IsBackground = true
+            };
             thread.Start();
 
             return true;

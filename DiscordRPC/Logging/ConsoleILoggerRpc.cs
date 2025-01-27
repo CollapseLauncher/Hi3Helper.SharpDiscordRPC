@@ -31,7 +31,7 @@ namespace DiscordRPC.Logging
         /// </summary>
         public ConsoleILoggerRpc()
         {
-            this.Level = LogLevel.Info;
+            Level = LogLevel.Info;
             Coloured = false;
         }
 

@@ -183,7 +183,7 @@ namespace DiscordRPC
         /// <param name="configuration">The configuration received by the OnReady event.</param>
         internal void SetConfiguration(Configuration configuration)
         {
-            this.CdnEndpoint = configuration.CdnHost;
+            CdnEndpoint = configuration.CdnHost;
         }
 
         /// <summary>
@@ -225,7 +225,7 @@ namespace DiscordRPC
             }
 
             // Finish of the endpoint
-            return string.Format("https://{0}{1}{2}?size={3}", this.CdnEndpoint, endpoint, GetAvatarExtension(format), (int)size);
+            return string.Format("https://{0}{1}{2}?size={3}", CdnEndpoint, endpoint, GetAvatarExtension(format), (int)size);
         }
 
         /// <summary>

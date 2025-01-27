@@ -114,13 +114,11 @@ namespace DiscordRPC.IO
         public bool ReadStream(Stream stream)
         {
             // Try to read the opcode
-            uint op;
-            if (!TryReadUInt32(stream, out op))
+            if (!TryReadUInt32(stream, out uint op))
                 return false;
 
             // Try to read the length
-            uint len;
-            if (!TryReadUInt32(stream, out len))
+            if (!TryReadUInt32(stream, out uint len))
                 return false;
 
             uint readsRemaining = len;

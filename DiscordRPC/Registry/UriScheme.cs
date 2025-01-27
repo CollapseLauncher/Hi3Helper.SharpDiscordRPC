@@ -36,9 +36,9 @@ namespace DiscordRPC.Registry
         private ILoggerRpc _iLoggerRpc;
         public UriSchemeRegister(ILoggerRpc iLoggerRpc, string applicationID, string steamAppID = null, string executable = null)
         {
-            _iLoggerRpc = iLoggerRpc;
-            ApplicationID = applicationID.Trim();
-            SteamAppID = steamAppID != null ? steamAppID.Trim() : null;
+            _iLoggerRpc    = iLoggerRpc;
+            ApplicationID  = applicationID.Trim();
+            SteamAppID     = steamAppID?.Trim();
             ExecutablePath = executable ?? GetApplicationLocation();
         }
 

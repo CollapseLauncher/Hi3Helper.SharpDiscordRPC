@@ -25,7 +25,8 @@ namespace DiscordRPC.RPC.Payload
         /// <summary>
         /// Creates a payload with empty data
         /// </summary>
-        public EventPayload() : base() { Data = null; }
+        public EventPayload()
+        { Data = null; }
 
         /// <summary>
         /// Creates a payload with empty data and a set nonce

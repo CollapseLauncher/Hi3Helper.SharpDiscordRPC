@@ -6,6 +6,9 @@ using System.Text.Json.Serialization;
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 // ReSharper disable UnusedMember.Local
 // ReSharper disable InconsistentNaming
+// ReSharper disable GrammarMistakeInComment
+// ReSharper disable CommentTypo
+// ReSharper disable UnusedMember.Global
 
 namespace DiscordRPC
 {
@@ -107,7 +110,7 @@ namespace DiscordRPC
         /// <returns></returns>
         public bool HasTimestamps()
         {
-            return this.Timestamps != null && (Timestamps.Start != null || Timestamps.End != null);
+            return Timestamps != null && (Timestamps.Start != null || Timestamps.End != null);
         }
 
         /// <summary>
@@ -116,7 +119,7 @@ namespace DiscordRPC
         /// <returns></returns>
         public bool HasAssets()
         {
-            return this.Assets != null;
+            return Assets != null;
         }
 
         /// <summary>
@@ -125,7 +128,7 @@ namespace DiscordRPC
         /// <returns></returns>
         public bool HasParty()
         {
-            return this.Party != null && this.Party.ID != null;
+            return Party is { ID: not null };
         }
 
         /// <summary>
@@ -255,13 +258,14 @@ namespace DiscordRPC
         /// <returns></returns>
         public RichPresence ToRichPresence()
         {
-            var presence = new RichPresence();
-            presence.State = State;
-            presence.Details = Details;
-            presence.Type = Type;
-
-            presence.Party = !HasParty() ? Party : null;
-            presence.Secrets = !HasSecrets() ? Secrets : null;
+            var presence = new RichPresence
+            {
+                State   = State,
+                Details = Details,
+                Type    = Type,
+                Party   = !HasParty() ? Party : null,
+                Secrets = !HasSecrets() ? Secrets : null
+            };
 
             if (HasAssets())
             {
@@ -415,30 +419,26 @@ namespace DiscordRPC
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string LargeImageKey
         {
-            get { return _largeimagekey; }
+            get { return _largeImageKey; }
             set
             {
-                if (!BaseRichPresence.ValidateString(value, out _largeimagekey, 256, Encoding.UTF8))
+                if (!BaseRichPresence.ValidateString(value, out _largeImageKey, 256, Encoding.UTF8))
                     throw new StringOutOfRangeException(256);
 
                 // Get if this is a external link
-                _islargeimagekeyexternal = _largeimagekey?.StartsWith("mp:external/") ?? false;
+                IsLargeImageKeyExternal = _largeImageKey?.StartsWith("mp:external/") ?? false;
 
                 // Reset the large image ID
-                _largeimageID = null;
+                LargeImageID = null;
             }
         }
-        private string _largeimagekey;
+        private string _largeImageKey;
 
         /// <summary>
         /// Gets if the large square image is from an external link
         /// </summary>
         [JsonIgnore]
-        public bool IsLargeImageKeyExternal
-        {
-            get { return _islargeimagekeyexternal; }
-        }
-        private bool _islargeimagekeyexternal;
+        public bool IsLargeImageKeyExternal { get; private set; }
 
         /// <summary>
         /// The tooltip for the large square image. For example, "Summoners Rift" or "Horizon Lunar Colony".
@@ -448,14 +448,14 @@ namespace DiscordRPC
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string LargeImageText
         {
-            get { return _largeimagetext; }
+            get { return _largeImageText; }
             set
             {
-                if (!BaseRichPresence.ValidateString(value, out _largeimagetext, 128, Encoding.UTF8))
+                if (!BaseRichPresence.ValidateString(value, out _largeImageText, 128, Encoding.UTF8))
                     throw new StringOutOfRangeException(128);
             }
         }
-        private string _largeimagetext;
+        private string _largeImageText;
 
         /// <summary>
         /// Name of the uploaded image for the small profile artwork.
@@ -466,30 +466,26 @@ namespace DiscordRPC
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string SmallImageKey
         {
-            get { return _smallimagekey; }
+            get { return _smallImageKey; }
             set
             {
-                if (!BaseRichPresence.ValidateString(value, out _smallimagekey, 256, Encoding.UTF8))
+                if (!BaseRichPresence.ValidateString(value, out _smallImageKey, 256, Encoding.UTF8))
                     throw new StringOutOfRangeException(256);
 
                 // Get if this is a external link
-                _issmallimagekeyexternal = _smallimagekey?.StartsWith("mp:external/") ?? false;
+                IsSmallImageKeyExternal = _smallImageKey?.StartsWith("mp:external/") ?? false;
 
                 // Reset the small image id
-                _smallimageID = null;
+                SmallImageID = null;
             }
         }
-        private string _smallimagekey;
+        private string _smallImageKey;
 
         /// <summary>
         /// Gets if the small profile artwork is from an external link
         /// </summary>
         [JsonIgnore]
-        public bool IsSmallImageKeyExternal
-        {
-            get { return _issmallimagekeyexternal; }
-        }
-        private bool _issmallimagekeyexternal;
+        public bool IsSmallImageKeyExternal { get; private set; }
 
         /// <summary>
         /// The tooltip for the small circle image. For example, "LvL 6" or "Ultimate 85%".
@@ -499,28 +495,26 @@ namespace DiscordRPC
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string SmallImageText
         {
-            get { return _smallimagetext; }
+            get { return _smallImageText; }
             set
             {
-                if (!BaseRichPresence.ValidateString(value, out _smallimagetext, 128, Encoding.UTF8))
+                if (!BaseRichPresence.ValidateString(value, out _smallImageText, 128, Encoding.UTF8))
                     throw new StringOutOfRangeException(128);
             }
         }
-        private string _smallimagetext;
+        private string _smallImageText;
 
         /// <summary>
         /// The ID of the large image. This is only set after Update Presence and will automatically become null when <see cref="LargeImageKey"/> is changed.
         /// </summary>
         [JsonIgnore]
-        public ulong? LargeImageID { get { return _largeimageID; } }
-        private ulong? _largeimageID;
+        public ulong? LargeImageID { get; private set; }
 
         /// <summary>
         /// The ID of the small image. This is only set after Update Presence and will automatically become null when <see cref="SmallImageKey"/> is changed.
         /// </summary>
         [JsonIgnore]
-        public ulong? SmallImageID { get { return _smallimageID; } }
-        private ulong? _smallimageID;
+        public ulong? SmallImageID { get; private set; }
 
         /// <summary>
         /// Merges this asset with the other, taking into account for ID's instead of keys.
@@ -529,31 +523,29 @@ namespace DiscordRPC
         internal void Merge(Assets other)
         {
             // Copy over the names
-            _smallimagetext = other._smallimagetext;
-            _largeimagetext = other._largeimagetext;
+            _smallImageText = other._smallImageText;
+            _largeImageText = other._largeImageText;
 
             // Convert large ID
-            ulong largeID;
-            if (ulong.TryParse(other._largeimagekey, out largeID))
+            if (ulong.TryParse(other._largeImageKey, out ulong largeID))
             {
-                _largeimageID = largeID;
+                LargeImageID = largeID;
             }
             else
             {
-                _largeimagekey = other._largeimagekey;
-                _largeimageID = null;
+                _largeImageKey = other._largeImageKey;
+                LargeImageID = null;
             }
 
             // Convert the small ID
-            ulong smallID;
-            if (ulong.TryParse(other._smallimagekey, out smallID))
+            if (ulong.TryParse(other._smallImageKey, out ulong smallID))
             {
-                _smallimageID = smallID;
+                SmallImageID = smallID;
             }
             else
             {
-                _smallimagekey = other._smallimagekey;
-                _smallimageID = null;
+                _smallImageKey = other._smallImageKey;
+                SmallImageID = null;
             }
         }
     }
@@ -719,8 +711,8 @@ namespace DiscordRPC
         /// </summary>
         [JsonPropertyName("id")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string ID { get { return _partyid; } set { _partyid = value.GetNullOrString(); } }
-        private string _partyid;
+        public string ID { get { return _partyId; } set { _partyId = value.GetNullOrString(); } }
+        private string _partyId;
 
         /// <summary>
         /// The current size of the players party / lobby / group.
@@ -802,7 +794,7 @@ namespace DiscordRPC
                 if (!BaseRichPresence.ValidateString(value, out _url, 512, Encoding.UTF8))
                     throw new StringOutOfRangeException(512);
 
-                if (!Uri.TryCreate(_url, UriKind.Absolute, out var uriResult)) // || !(uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
+                if (!Uri.TryCreate(_url, UriKind.Absolute, out Uri _)) // || !(uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
                     throw new ArgumentException("Url must be a valid URI");
             }
         }
@@ -853,7 +845,7 @@ namespace DiscordRPC
         /// <returns></returns>
         public bool HasButtons()
         {
-            return Buttons != null && Buttons.Length > 0;
+            return Buttons is { Length: > 0 };
         }
 
         #region Builder
@@ -945,38 +937,38 @@ namespace DiscordRPC
         {
             return new RichPresence
             {
-                State = this._state != null ? _state.Clone() as string : null,
-                Details = this._details != null ? _details.Clone() as string : null,
-                Type = this.Type,
+                State   = _state?.Clone() as string,
+                Details = _details?.Clone() as string,
+                Type    = Type,
 
-                Buttons = !HasButtons() ? null : this.Buttons.Clone() as Button[],
+                Buttons = !HasButtons() ? null : Buttons.Clone() as Button[],
                 Secrets = !HasSecrets() ? null : new Secrets
                 {
                     // MatchSecret = this.Secrets.MatchSecret?.Clone() as string,
-                    JoinSecret = this.Secrets.JoinSecret != null ? this.Secrets.JoinSecret.Clone() as string : null,
-                    SpectateSecret = this.Secrets.SpectateSecret != null ? this.Secrets.SpectateSecret.Clone() as string : null
+                    JoinSecret = Secrets.JoinSecret?.Clone() as string,
+                    SpectateSecret = Secrets.SpectateSecret?.Clone() as string
                 },
 
                 Timestamps = !HasTimestamps() ? null : new Timestamps
                 {
-                    Start = this.Timestamps.Start,
-                    End = this.Timestamps.End
+                    Start = Timestamps.Start,
+                    End = Timestamps.End
                 },
 
                 Assets = !HasAssets() ? null : new Assets
                 {
-                    LargeImageKey = this.Assets.LargeImageKey != null ? this.Assets.LargeImageKey.Clone() as string : null,
-                    LargeImageText = this.Assets.LargeImageText != null ? this.Assets.LargeImageText.Clone() as string : null,
-                    SmallImageKey = this.Assets.SmallImageKey != null ? this.Assets.SmallImageKey.Clone() as string : null,
-                    SmallImageText = this.Assets.SmallImageText != null ? this.Assets.SmallImageText.Clone() as string : null
+                    LargeImageKey = Assets.LargeImageKey?.Clone() as string,
+                    LargeImageText = Assets.LargeImageText?.Clone() as string,
+                    SmallImageKey = Assets.SmallImageKey?.Clone() as string,
+                    SmallImageText = Assets.SmallImageText?.Clone() as string
                 },
 
                 Party = !HasParty() ? null : new Party
                 {
-                    ID = this.Party.ID,
-                    Size = this.Party.Size,
-                    Max = this.Party.Max,
-                    Privacy = this.Party.Privacy,
+                    ID = Party.ID,
+                    Size = Party.Size,
+                    Max = Party.Max,
+                    Privacy = Party.Privacy,
                 },
             };
         }
@@ -988,32 +980,32 @@ namespace DiscordRPC
         /// <returns>self</returns>
         internal RichPresence Merge(BaseRichPresence presence)
         {
-            this._state = presence.State;
-            this._details = presence.Details;
-            this.Type = presence.Type;
-            this.Party = presence.Party;
-            this.Timestamps = presence.Timestamps;
-            this.Secrets = presence.Secrets;
+            _state = presence.State;
+            _details = presence.Details;
+            Type = presence.Type;
+            Party = presence.Party;
+            Timestamps = presence.Timestamps;
+            Secrets = presence.Secrets;
 
             // If they have assets, we should merge them
             if (presence.HasAssets())
             {
                 // Make sure we actually have assets too
-                if (!this.HasAssets())
+                if (!HasAssets())
                 {
                     // We dont, so we will just use theirs
-                    this.Assets = presence.Assets;
+                    Assets = presence.Assets;
                 }
                 else
                 {
                     // We do, so we better merge them!
-                    this.Assets.Merge(presence.Assets);
+                    Assets.Merge(presence.Assets);
                 }
             }
             else
             {
                 // They dont have assets, so we will just set ours to null
-                this.Assets = null;
+                Assets = null;
             }
 
             return this;
@@ -1025,16 +1017,18 @@ namespace DiscordRPC
 
             // Check buttons
             if (Buttons == null ^ other.Buttons == null) return false;
-            if (Buttons != null)
+            if (Buttons == null)
             {
-                if (Buttons.Length != other.Buttons?.Length) return false;
-                for (int i = 0; i < Buttons.Length; i++)
-                {
-                    var a = Buttons[i];
-                    var b = other.Buttons[i];
-                    if (a.Label != b.Label || a.Url != b.Url)
-                        return false;
-                }
+                return true;
+            }
+
+            if (Buttons.Length != other.Buttons?.Length) return false;
+            for (int i = 0; i < Buttons.Length; i++)
+            {
+                var a = Buttons[i];
+                var b = other.Buttons[i];
+                if (a.Label != b.Label || a.Url != b.Url)
+                    return false;
             }
 
             return true;
