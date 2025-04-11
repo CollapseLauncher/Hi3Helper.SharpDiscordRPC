@@ -257,7 +257,7 @@ namespace DiscordRPC
             };
 
             // Subscribe to its event
-            connection.OnRpcMessage += (sender, msg) =>
+            connection.OnRpcMessage += (_, msg) =>
             {
                 if (OnRpcMessage != null)
                     OnRpcMessage.Invoke(this, msg);

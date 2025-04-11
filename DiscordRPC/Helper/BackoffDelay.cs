@@ -24,7 +24,7 @@ namespace DiscordRPC.Helper
         /// <summary>
         /// The current number of failures
         /// </summary>
-        public int Fails { get; private set; } = 0;
+        public int Fails { get; private set; }
 
         /// <summary>
         /// The random generator

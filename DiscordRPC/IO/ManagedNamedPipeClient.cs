@@ -51,7 +51,7 @@ namespace DiscordRPC.IO
         private Queue<PipeFrame> _framequeue = new Queue<PipeFrame>();
         private object _framequeuelock = new object();
 
-        private volatile bool _isDisposed = false;
+        private volatile bool _isDisposed;
         private volatile bool _isClosed = true;
 
         private object l_stream = new object();
