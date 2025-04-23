@@ -91,6 +91,7 @@ namespace DiscordRPC.IO
                         BeginReadStream();
                         return true;
                     }
+                    Thread.Sleep(500); // Wait a bit before trying again
                 }
             }
             else
