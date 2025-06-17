@@ -19,12 +19,6 @@
         "resolved": "10.0.0-preview.5.25277.114",
         "contentHash": "lKaVaiJvMwAny3XEQI8zP88GVLKBQeb5VIG25jzGkoO4ilRWJAJpYgP0EmgBi4BjJB5PbKEAuMCEbxYthf2vQw=="
       },
-      "System.Text.Json": {
-        "type": "Direct",
-        "requested": "[10.0.0-preview.5.25277.114, )",
-        "resolved": "10.0.0-preview.5.25277.114",
-        "contentHash": "3Wsrsr1j5kEiCdqysf354fN2+0y+r4Gc94F5VLcPL59a+brREk7Vv4kFQj23ZwvoPUml/qvlPkwqc5QlsBqvkg=="
-      },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "Transitive",
         "resolved": "10.0.0-preview.5.25277.114",
