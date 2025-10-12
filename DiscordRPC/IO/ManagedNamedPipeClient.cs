@@ -412,15 +412,34 @@ namespace DiscordRPC.IO
             _isDisposed = true;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="pipe"></param>
+        /// <returns></returns>
         [System.Obsolete("Use PipePermutation.GetPipes instead", true)]
         public static string GetPipeName(int pipe)
             => string.Empty;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="pipe"></param>
+        /// <param name="sandbox"></param>
+        /// <returns></returns>
         [System.Obsolete("Use PipePermutation.GetPipes instead", true)]
         public static string GetPipeName(int pipe, string sandbox)
             => string.Empty;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
         [System.Obsolete("Use PipePermutation.GetPipes instead", true)]
         public static string GetPipeSandbox()
             => string.Empty;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
         [System.Obsolete("Use PipePermutation.GetPipes instead", true)]
         public static bool IsUnix()
             => true;

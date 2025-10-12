@@ -1,4 +1,5 @@
-﻿using DiscordRPC.RPC.Payload;
+﻿using DiscordRPC.Helper;
+using DiscordRPC.RPC.Payload;
 using System.Text.Json.Serialization;
 
 namespace DiscordRPC.RPC.Commands
@@ -19,7 +20,7 @@ namespace DiscordRPC.RPC.Commands
 
         public IPayload PreparePayload(long nonce)
         {
-            return new ArgumentPayload<PresenceCommand>(this, nonce)
+            return new ArgumentPayload<PresenceCommand>(this, JsonSerializationContext.Default.PresenceCommand, nonce)
             {
                 Command = Command.SetActivity
             };

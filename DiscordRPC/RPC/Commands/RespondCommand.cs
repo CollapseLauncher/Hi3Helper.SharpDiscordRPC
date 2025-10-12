@@ -1,4 +1,5 @@
-﻿using DiscordRPC.RPC.Payload;
+﻿using DiscordRPC.Helper;
+using DiscordRPC.RPC.Payload;
 using System.Text.Json.Serialization;
 
 namespace DiscordRPC.RPC.Commands
@@ -19,7 +20,7 @@ namespace DiscordRPC.RPC.Commands
 
         public IPayload PreparePayload(long nonce)
         {
-            return new ArgumentPayload<RespondCommand>(this, nonce)
+            return new ArgumentPayload<RespondCommand>(this, JsonSerializationContext.Default.RespondCommand, nonce)
             {
                 Command = Accept ? Command.SendActivityJoinInvite : Command.CloseActivityJoinRequest
             };

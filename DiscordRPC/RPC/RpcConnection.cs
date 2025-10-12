@@ -9,6 +9,7 @@ using System.Threading;
 using System.Text.Json;
 using DiscordRPC.Logging;
 using DiscordRPC.Events;
+using System.Text.Json.Serialization.Metadata;
 
 namespace DiscordRPC.RPC
 {
@@ -66,19 +67,19 @@ namespace DiscordRPC.RPC
 		{
 			get
 			{
-				lock (l_states)
+				using (_lStates.EnterScope())
 					return _state;
 			}
 		}
 		private RpcState _state;
-		private readonly object l_states = new object();
+		private readonly Lock _lStates = new Lock();
 
 		/// <summary>
 		/// The configuration received by the Ready
 		/// </summary>
-		public Configuration Configuration { get { Configuration tmp = null; lock (l_config) tmp = _configuration; return tmp; } }
+		public Configuration Configuration { get { Configuration tmp = null; using (_lConfig.EnterScope()) tmp = _configuration; return tmp; } }
 		private Configuration _configuration = null;
-		private readonly object l_config = new object();
+		private readonly Lock _lConfig = new Lock();
 
 		private volatile bool aborting = false;
 		private volatile bool shutdown = false;
@@ -108,11 +109,11 @@ namespace DiscordRPC.RPC
 
 		private int targetPipe;                             //The pipe to taget. Leave as -1 for any available pipe.
 
-		private readonly object l_rtqueue = new object();   //Lock for the send queue
+		private readonly Lock _lRtqueue = new Lock();   //Lock for the send queue
 		private readonly uint _maxRtQueueSize;
 		private Queue<ICommand> _rtqueue;                   //The send queue
 
-		private readonly object l_rxqueue = new object();   //Lock for the receive queue
+		private readonly Lock _lRxqueue = new Lock();   //Lock for the receive queue
 		private readonly uint _maxRxQueueSize;              //The max size of the RX queue
 		private Queue<IMessage> _rxqueue;                   //The receive queue
 
@@ -170,7 +171,7 @@ namespace DiscordRPC.RPC
 			if (aborting || shutdown) return;
 
 			//Enqueue the set presence argument
-			lock (l_rtqueue)
+			lock (_lRtqueue)
 			{
 				//If we are too big drop the last element
 				if (_rtqueue.Count == _maxRtQueueSize)
@@ -212,7 +213,7 @@ namespace DiscordRPC.RPC
 
 			//Large queue sizes should keep the queue in check
 			Logger.Trace("Enqueue Message: {0}", message.Type);
-			lock (l_rxqueue)
+			lock (_lRxqueue)
 			{
 				//If we are too big drop the last element
 				if (_rxqueue.Count == _maxRxQueueSize)
@@ -233,7 +234,7 @@ namespace DiscordRPC.RPC
 		internal IMessage DequeueMessage()
 		{
 			//Logger.Trace("Deque Message");
-			lock (l_rxqueue)
+			using (_lRxqueue.EnterScope())
 			{
 				//We have nothing, so just return null.
 				if (_rxqueue.Count == 0) return null;
@@ -250,7 +251,7 @@ namespace DiscordRPC.RPC
 		internal IMessage[] DequeueMessages()
 		{
 			//Logger.Trace("Deque Multiple Messages");
-			lock (l_rxqueue)
+			using (_lRxqueue.EnterScope())
 			{
 				//Copy the messages into an array
 				IMessage[] messages = _rxqueue.ToArray();
@@ -274,10 +275,10 @@ namespace DiscordRPC.RPC
 			if (Logger.Level <= LogLevel.Trace)
 			{
 				Logger.Trace("============================");
-				Logger.Trace("Assembly:             " + System.Reflection.Assembly.GetAssembly(typeof(RichPresence)).FullName);
+				Logger.Trace("Assembly:             " + System.Reflection.Assembly.GetAssembly(typeof(RichPresence))?.FullName);
 				Logger.Trace("Pipe:                 " + namedPipe.GetType().FullName);
-				Logger.Trace("Platform:             " + Environment.OSVersion.ToString());
-				Logger.Trace("DotNet:               " + Environment.Version.ToString());
+				Logger.Trace("Platform:             " + Environment.OSVersion);
+				Logger.Trace("DotNet:               " + Environment.Version);
 				Logger.Trace("applicationID:        " + applicationID);
 				Logger.Trace("targetPipe:           " + targetPipe);
 				Logger.Trace("POLL_RATE:            " + POLL_RATE);
@@ -338,7 +339,7 @@ namespace DiscordRPC.RPC
 									//We have been told by discord to close, so we will consider it an abort
 									case Opcode.Close:
 
-										ClosePayload close = frame.GetObject<ClosePayload>();
+										ClosePayload close = frame.GetObject(JsonSerializationContext.Default.ClosePayload);
 										Logger.Warning("We have been told to terminate by discord: ({0}) {1}", close.Code, close.Reason);
 										EnqueueMessage(new CloseMessage() { Code = close.Code, Reason = close.Reason });
 										mainloop = false;
@@ -374,7 +375,7 @@ namespace DiscordRPC.RPC
 
 										//We have a frame, so we are going to process the payload and add it to the stack
 										EventPayload response = null;
-										try { response = frame.GetObject<EventPayload>(); }
+										try { response = frame.GetObject(JsonSerializationContext.Default.EventPayload); }
 										catch (Exception e)
 										{
 											Logger.Error("Failed to parse event! {0}", e.Message);
@@ -483,7 +484,7 @@ namespace DiscordRPC.RPC
 				Logger.Error("Error received from the RPC");
 
 				//Create the event objetc and push it to the queue
-				ErrorMessage err = response.GetObject<ErrorMessage>();
+				ErrorMessage err = response.GetObject(JsonSerializationContext.Default.ErrorMessage);
 				Logger.Error("Server responded with an error message: ({0}) {1}", err.Code.ToString(), err.Message);
 
 				//Enqueue the messsage and then end
@@ -501,8 +502,8 @@ namespace DiscordRPC.RPC
 					delay.Reset();
 
 					//Prepare the object
-					ReadyMessage ready = response.GetObject<ReadyMessage>();
-					lock (l_config)
+					ReadyMessage ready = response.GetObject(JsonSerializationContext.Default.ReadyMessage);
+					lock (_lConfig)
 					{
 						_configuration = ready.Configuration;
 						ready.User.SetConfiguration(_configuration);
@@ -531,7 +532,7 @@ namespace DiscordRPC.RPC
 						}
 						else
 						{
-							RichPresenceResponse rp = response.GetObject<RichPresenceResponse>();
+							RichPresenceResponse rp = response.GetObject(JsonSerializationContext.Default.RichPresenceResponse);
 							EnqueueMessage(new PresenceMessage(rp));
 						}
 						break;
@@ -542,10 +543,10 @@ namespace DiscordRPC.RPC
 						//Prepare a serializer that can account for snake_case enums.
 						// JsonSerializer serializer = new JsonSerializer();
 						// serializer.Converters.Add(new Converters.EnumSnakeCaseConverter());
-                        
+						
 
 						//Go through the data, looking for the evt property, casting it to a server event
-						var evt = response.GetObject<EventPayload>().Event.Value;
+						var evt = response.GetObject(JsonSerializationContext.Default.EventPayload)?.Event ?? default;
 
 						//Enqueue the appropriate message.
 						if (response.Command == Command.Subscribe)
@@ -584,17 +585,17 @@ namespace DiscordRPC.RPC
 			{
 				//We are to join the server
 				case ServerEvent.ActivitySpectate:
-					var spectate = response.GetObject<SpectateMessage>();
+					var spectate = response.GetObject(JsonSerializationContext.Default.SpectateMessage);
 					EnqueueMessage(spectate);
 					break;
 
 				case ServerEvent.ActivityJoin:
-					var join = response.GetObject<JoinMessage>();
+					var join = response.GetObject(JsonSerializationContext.Default.JoinMessage);
 					EnqueueMessage(join);
 					break;
 
 				case ServerEvent.ActivityJoinRequest:
-					var request = response.GetObject<JoinRequestMessage>();
+					var request = response.GetObject(JsonSerializationContext.Default.JoinRequestMessage);
 					EnqueueMessage(request);
 					break;
 
@@ -623,12 +624,12 @@ namespace DiscordRPC.RPC
 
 			//Prepare some variabels we will clone into with locks
 			bool needsWriting = true;
-			ICommand item = null;
 
 			//Continue looping until we dont need anymore messages
 			while (needsWriting && namedPipe.IsConnected)
 			{
-				lock (l_rtqueue)
+				ICommand item;
+				lock (_lRtqueue)
 				{
 					//Pull the value and update our writing needs
 					// If we have nothing to write, exit the loop
@@ -657,7 +658,7 @@ namespace DiscordRPC.RPC
 
 					//Queue the item
 					Logger.Trace("Handwave sent, ending queue processing.");
-					lock (l_rtqueue) _rtqueue.Dequeue();
+					lock (_lRtqueue) _rtqueue.Dequeue();
 
 					//Stop sending any more messages
 					return;
@@ -668,12 +669,13 @@ namespace DiscordRPC.RPC
 					{
 						//We are aborting, so just dequeue the message and dont bother sending it
 						Logger.Warning("- skipping frame because of abort.");
-						lock (l_rtqueue) _rtqueue.Dequeue();
+						lock (_lRtqueue) _rtqueue.Dequeue();
 					}
 					else
 					{
 						//Prepare the frame
-						frame.SetObject(Opcode.Frame, payload);
+						JsonTypeInfo typeOfTypeInfo = JsonSerializationContext.Default.GetTypeInfo(payload.GetType());
+						frame.SetObject(Opcode.Frame, payload, typeOfTypeInfo);
 
 						//Write it and if it wrote perfectly fine, we will dequeue it
 						Logger.Trace("Sending payload: {0}", payload.Command);
@@ -684,7 +686,7 @@ namespace DiscordRPC.RPC
 						{
 							//We sent it, so now dequeue it
 							Logger.Trace("Sent Successfully.");
-							lock (l_rtqueue) _rtqueue.Dequeue();
+							lock (_lRtqueue) _rtqueue.Dequeue();
 						}
 						else
 						{
@@ -721,7 +723,7 @@ namespace DiscordRPC.RPC
 
 			//Send it off to the server
 			Logger.Trace("Sending Handshake...");
-			if (!namedPipe.WriteFrame(new PipeFrame(Opcode.Handshake, new Handshake() { Version = VERSION, ClientID = applicationID })))
+			if (!namedPipe.WriteFrame(PipeFrame.Create(Opcode.Handshake, new Handshake { Version = VERSION, ClientID = applicationID }, JsonSerializationContext.Default.Handshake)))
 			{
 				Logger.Error("Failed to write a handshake.");
 				return;
@@ -746,7 +748,7 @@ namespace DiscordRPC.RPC
 			}
 
 			//Send the handwave
-			if (!namedPipe.WriteFrame(new PipeFrame(Opcode.Close, new Handshake() { Version = VERSION, ClientID = applicationID })))
+			if (!namedPipe.WriteFrame(PipeFrame.Create(Opcode.Close, new Handshake { Version = VERSION, ClientID = applicationID }, JsonSerializationContext.Default.Handshake)))
 			{
 				Logger.Error("failed to write a handwave.");
 				return;
@@ -798,7 +800,7 @@ namespace DiscordRPC.RPC
 		private void SetConnectionState(RpcState state)
 		{
 			Logger.Trace("Setting the connection state to {0}", state.ToString().ToSnakeCase().ToUpperInvariant());
-			lock (l_states)
+			lock (_lStates)
 			{
 				_state = state;
 			}
@@ -815,7 +817,7 @@ namespace DiscordRPC.RPC
 			shutdown = true;
 
 			//Clear the commands and enqueue the close
-			lock (l_rtqueue)
+			lock (_lRtqueue)
 			{
 				_rtqueue.Clear();
 				if (CLEAR_ON_SHUTDOWN) _rtqueue.Enqueue(new PresenceCommand() { PID = processID, Presence = null });

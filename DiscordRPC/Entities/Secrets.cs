@@ -16,7 +16,7 @@ namespace DiscordRPC
 	public class Secrets
 	{
 		/// <summary>
-		/// The unique match code to distinguish different games/lobbies. Use <see cref="Secrets.CreateSecret(Random)"/> to get an appropriately sized secret. 
+		/// The unique match code to distinguish different games/lobbies. Use <see cref="Secrets"/> to get an appropriately sized secret. 
 		/// <para>This cannot be null and must be supplied for the  Join / Spectate feature to work.</para>
 		/// <para>Max Length of 128 characters</para>
 		/// </summary>

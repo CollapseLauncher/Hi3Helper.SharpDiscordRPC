@@ -1,6 +1,4 @@
-﻿using DiscordRPC.Exceptions;
-using System;
-using System.Text.Json;
+﻿using System;
 using System.Text.Json.Serialization;
 
 namespace DiscordRPC
@@ -138,7 +136,7 @@ namespace DiscordRPC
 		/// The flags on a users account, often represented as a badge.
 		/// </summary>
 		[JsonPropertyName("flags")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
 		public Flag Flags { get; private set; }
 
 		/// <summary>
@@ -216,7 +214,7 @@ namespace DiscordRPC
 		/// The premium type of the user.
 		/// </summary>
 		[JsonPropertyName("premium_type")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
 		public PremiumType Premium { get; private set; }
 
 		/// <summary>
@@ -240,15 +238,7 @@ namespace DiscordRPC
 		/// <summary>
 		/// The endpoint for the CDN. Normally cdn.discordapp.com.
 		/// </summary>
-		public string CdnEndpoint { get; private set; }
-
-		/// <summary>
-		/// Creates a new User instance.
-		/// </summary>
-		internal User()
-		{
-			CdnEndpoint = "cdn.discordapp.com";
-		}
+		public string CdnEndpoint { get; private set; } = "cdn.discordapp.com";
 
 		/// <summary>
 		/// Updates the URL paths to the appropriate configuration

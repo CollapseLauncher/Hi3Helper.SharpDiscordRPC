@@ -1,6 +1,7 @@
 ﻿using DiscordRPC.Helper;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace DiscordRPC.RPC.Payload
 {
@@ -39,11 +40,7 @@ namespace DiscordRPC.RPC.Payload
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public T GetObject<T>()
-        {
-            if (Data == null) return default(T);
-            return (T)Data.Deserialize(typeof(T), JsonSerializationContext.Default);
-        }
+        public T GetObject<T>(JsonTypeInfo<T> jsonTypeInfo) => Data == null ? default : Data.Deserialize(jsonTypeInfo);
 
         /// <summary>
         /// Converts the object into a human readable string

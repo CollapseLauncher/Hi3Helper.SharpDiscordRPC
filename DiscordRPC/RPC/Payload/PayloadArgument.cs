@@ -1,6 +1,7 @@
 ﻿using DiscordRPC.Helper;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace DiscordRPC.RPC.Payload
 {
@@ -10,6 +11,7 @@ namespace DiscordRPC.RPC.Payload
     /// SetPresence
     /// </para>
     /// </summary>
+    /// <typeparam name="T"></typeparam>
     internal class ArgumentPayload<T> : IPayload
         where T : class
     {
@@ -22,29 +24,26 @@ namespace DiscordRPC.RPC.Payload
 
         public ArgumentPayload() { Arguments                         = null; }
         public ArgumentPayload(long nonce) : base(nonce) { Arguments = null; }
-        public ArgumentPayload(object args, long nonce) : base(nonce)
+        public ArgumentPayload(object args, JsonTypeInfo<T> jsonTypeInfo, long nonce) : base(nonce)
         {
-            SetObject((T)args);
+            SetObject((T)args, jsonTypeInfo);
         }
 
         /// <summary>
         /// Sets the object stored within the data.
         /// </summary>
         /// <param name="obj"></param>
-        public void SetObject(T obj)
+        /// <param name="typeInfo"></param>
+        public void SetObject(T obj, JsonTypeInfo<T> typeInfo)
         {
-            Arguments = JsonSerializer.SerializeToDocument(obj, typeof(T), JsonSerializationContext.Default);
+            Arguments = JsonSerializer.SerializeToDocument(obj, typeInfo);
         }
 
         /// <summary>
         /// Gets the object stored within the Data
         /// </summary>
-        /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public T GetObject()
-        {
-            return (T)Arguments.Deserialize(typeof(T), JsonSerializationContext.Default);
-        }
+        public T GetObject(JsonTypeInfo<T> typeInfo) => Arguments.Deserialize(typeInfo);
 
         public override string ToString()
         {

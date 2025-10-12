@@ -126,14 +126,14 @@ namespace DiscordRPC
         /// The activity type
         /// </summary>
         [JsonPropertyName("type")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public ActivityType Type { get; set; }
 
         /// <summary>
         /// The display type for the status
         /// </summary>
         [JsonPropertyName("status_display_type")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public StatusDisplayType StatusDisplay { get; set; }
 
         #region Has Checks
