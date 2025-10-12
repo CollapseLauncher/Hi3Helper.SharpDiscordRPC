@@ -208,6 +208,13 @@ namespace DiscordRPC
         public DiscordRpcClient(string applicationID) : this(applicationID, -1) { }
 
         /// <summary>
+        /// Creates a new Discord RPC Client which can be used to send Rich Presence and receive Join events.
+        /// </summary>
+        /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
+        /// <param name="logger">The logger used to report messages. If null, then a <see cref="NullLogger"/> will be created and logs will be ignored.</param>
+        public DiscordRpcClient(string applicationID, Microsoft.Extensions.Logging.ILogger logger) : this(applicationID, -1, new MicrosoftILoggerWrapper(logger)) { }
+
+        /// <summary>
         /// Creates a new Discord RPC Client which can be used to send Rich Presence and receive Join events. This constructor exposes more advance features such as custom NamedPipeClients and Loggers.
         /// </summary>
         /// <param name="applicationID">The ID of the application created at discord's developers portal.</param>
