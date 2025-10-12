@@ -1,4 +1,4 @@
-﻿// ReSharper disable UnusedAutoPropertyAccessor.Global
+// ReSharper disable UnusedAutoPropertyAccessor.Global
 // ReSharper disable UnusedMember.Global
 
 using System.Text.Json.Serialization;
@@ -48,9 +48,9 @@ namespace DiscordRPC.Message
         /// <summary>The functionality was not yet implemented</summary>
         NotImplemented = 10,
 
-        // Discord RPC error codes
-        /// <summary>Unknown Discord error</summary>
-        UnknownError = 1000,
+		//Discord RPC error codes
+		///<summary>Unknown Discord error</summary>
+		UnknownError = 1000,
 
         /// <summary>Invalid Payload received</summary>
         InvalidPayload = 4000,

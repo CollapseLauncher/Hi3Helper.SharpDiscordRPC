@@ -1,4 +1,4 @@
-﻿using DiscordRPC.RPC.Payload;
+using DiscordRPC.RPC.Payload;
 
 namespace DiscordRPC.Message
 {
@@ -22,16 +22,12 @@ namespace DiscordRPC.Message
             switch (evt)
             {
                 default:
-                case ServerEvent.ACTIVITY_JOIN:
+                case ServerEvent.ActivityJoin:
                     Event = EventType.Join;
                     break;
 
-                case ServerEvent.ACTIVITY_JOIN_REQUEST:
+                case ServerEvent.ActivityJoinRequest:
                     Event = EventType.JoinRequest;
-                    break;
-
-                case ServerEvent.ACTIVITY_SPECTATE:
-                    Event = EventType.Spectate;
                     break;
             }
         }

@@ -11,7 +11,7 @@ namespace DiscordRPC.RPC.Commands
         {
             return new EventPayload(nonce)
             {
-                Command = IsUnsubscribe ? Command.UNSUBSCRIBE : Command.SUBSCRIBE,
+                Command = IsUnsubscribe ? Command.Unsubscribe : Command.Subscribe,
                 Event = Event
             };
         }

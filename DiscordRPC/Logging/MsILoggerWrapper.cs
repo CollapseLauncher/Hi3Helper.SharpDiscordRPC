@@ -1,11 +1,12 @@
 using Microsoft.Extensions.Logging;
 using System;
+using LoggerDotNet = Microsoft.Extensions.Logging.ILogger;
 
 namespace DiscordRPC.Logging
 {
-    public class MsILoggerWrapper(ILogger logger) : ILoggerRpc
+    public class MsILoggerWrapper(LoggerDotNet _loggerNet) : ILogger
     {
-        public LogLevel Level { get; set; }
+        public           LogLevel Level { get; set; }
 
         private string FormatMessage(string message, params object[] args)
         {
@@ -15,28 +16,28 @@ namespace DiscordRPC.Logging
         public void Trace(string message, params object[] args)
         {
 #if DEBUG
-            logger.LogTrace(FormatMessage(message, args));
+            _loggerNet.LogTrace(FormatMessage(message, args));
 #endif
         }
 
         public void Info(string message, params object[] args)
         {
-            logger.LogInformation(FormatMessage(message, args));
+            _loggerNet.LogInformation(FormatMessage(message, args));
         }
 
         public void Warning(string message, params object[] args)
         {
-            logger.LogWarning(FormatMessage(message, args));
+            _loggerNet.LogWarning(FormatMessage(message, args));
         }
 
         public void Error(string message, params object[] args)
         {
-            logger.LogError(FormatMessage(message, args));
+            _loggerNet.LogError(FormatMessage(message, args));
         }
 
         public void Error(Exception ex, string message, params object[] args)
         {
-            logger.LogError(ex, FormatMessage(message, args));
+            _loggerNet.LogError(ex, FormatMessage(message, args));
         }
     }
 }

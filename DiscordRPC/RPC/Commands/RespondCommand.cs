@@ -21,7 +21,7 @@ namespace DiscordRPC.RPC.Commands
         {
             return new ArgumentPayload<RespondCommand>(this, nonce)
             {
-                Command = Accept ? Command.SEND_ACTIVITY_JOIN_INVITE : Command.CLOSE_ACTIVITY_JOIN_REQUEST
+                Command = Accept ? Command.SendActivityJoinInvite : Command.CloseActivityJoinRequest
             };
         }
     }

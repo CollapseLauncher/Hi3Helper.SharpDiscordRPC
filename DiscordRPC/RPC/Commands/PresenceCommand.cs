@@ -21,7 +21,7 @@ namespace DiscordRPC.RPC.Commands
         {
             return new ArgumentPayload<PresenceCommand>(this, nonce)
             {
-                Command = Command.SET_ACTIVITY
+                Command = Command.SetActivity
             };
         }
     }

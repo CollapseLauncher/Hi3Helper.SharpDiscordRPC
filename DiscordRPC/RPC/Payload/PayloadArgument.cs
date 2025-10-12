@@ -20,11 +20,11 @@ namespace DiscordRPC.RPC.Payload
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public JsonDocument Arguments { get; set; }
 
-        public ArgumentPayload() { Arguments = null; }
+        public ArgumentPayload() { Arguments                         = null; }
         public ArgumentPayload(long nonce) : base(nonce) { Arguments = null; }
-        public ArgumentPayload(T args, long nonce) : base(nonce)
+        public ArgumentPayload(object args, long nonce) : base(nonce)
         {
-            SetObject(args);
+            SetObject((T)args);
         }
 
         /// <summary>
