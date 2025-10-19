@@ -1,4 +1,8 @@
-﻿using DiscordRPC.RPC.Payload;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using DiscordRPC.RPC.Payload;
 using System.Text.Json.Serialization;
 
 namespace DiscordRPC.RPC.Commands
@@ -19,10 +23,10 @@ namespace DiscordRPC.RPC.Commands
 
         public IPayload PreparePayload(long nonce)
         {
-            return new ArgumentPayload<CloseCommand>
+            return new ArgumentPayload<Dictionary<string, object>>
             {
-                Command = Command.DISPATCH,
-                Nonce = null,
+                Command   = Command.Dispatch,
+                Nonce     = null,
                 Arguments = null
             };
         }

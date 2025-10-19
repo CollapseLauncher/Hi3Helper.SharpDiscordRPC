@@ -1,4 +1,4 @@
-﻿using DiscordRPC.RPC.Payload;
+using DiscordRPC.RPC.Payload;
 
 namespace DiscordRPC.Message
 {
@@ -12,28 +12,24 @@ namespace DiscordRPC.Message
         /// </summary>
         public override MessageType Type { get { return MessageType.Subscribe; } }
 
-        /// <summary>
-        /// The event that was subscribed too.
-        /// </summary>
-        public EventType Event { get; internal set; }
+		/// <summary>
+		/// The event that was subscribed too.
+		/// </summary>
+		public EventType Event { get; internal set; }
 
-        internal SubscribeMessage(ServerEvent evt)
-        {
-            switch (evt)
-            {
-                default:
-                case ServerEvent.ACTIVITY_JOIN:
-                    Event = EventType.Join;
-                    break;
+		internal SubscribeMessage(ServerEvent evt)
+		{
+			switch (evt)
+			{
+				default:
+				case ServerEvent.ActivityJoin:
+					Event = EventType.Join;
+					break;
 
-                case ServerEvent.ACTIVITY_JOIN_REQUEST:
-                    Event = EventType.JoinRequest;
-                    break;
-
-                case ServerEvent.ACTIVITY_SPECTATE:
-                    Event = EventType.Spectate;
-                    break;
-            }
-        }
-    }
+				case ServerEvent.ActivityJoinRequest:
+					Event = EventType.JoinRequest;
+					break;
+			}
+		}
+	}
 }

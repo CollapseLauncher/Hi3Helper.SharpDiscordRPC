@@ -1,5 +1,8 @@
-﻿using DiscordRPC.Logging;
+using DiscordRPC.Logging;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 namespace DiscordRPC.IO
 {
@@ -8,10 +11,11 @@ namespace DiscordRPC.IO
     /// </summary>
     public interface INamedPipeClient : IDisposable
     {
+
         /// <summary>
         /// The logger for the Pipe client to use
         /// </summary>
-        ILoggerRpc ILoggerRpc { get; set; }
+        ILogger Logger { get; set; }
 
         /// <summary>
         /// Is the pipe client currently connected?
@@ -21,6 +25,7 @@ namespace DiscordRPC.IO
         /// <summary>
         /// The pipe the client is currently connected too
         /// </summary>
+        [System.Obsolete("The connected pipe is not neccessary information.")]
         int ConnectedPipe { get; }
 
         /// <summary>
@@ -47,5 +52,6 @@ namespace DiscordRPC.IO
         /// Closes the connection
         /// </summary>
         void Close();
+
     }
 }
