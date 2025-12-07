@@ -467,7 +467,8 @@ namespace DiscordRPC
         /// Sets the Rich Presence.
         /// </summary>
         /// <param name="presence">The Rich Presence to set on the current Discord user.</param>
-        public void SetPresence(RichPresence presence)
+        #nullable enable
+        public void SetPresence(RichPresence? presence)
         {
             if (IsDisposed)
                 throw new ObjectDisposedException("Discord IPC Client");
@@ -509,6 +510,7 @@ namespace DiscordRPC
                 CurrentPresence = presence?.Clone();
             }
         }
+        #nullable restore
 
         #region Updates
 
