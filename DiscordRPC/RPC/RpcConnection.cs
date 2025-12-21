@@ -26,7 +26,7 @@ namespace DiscordRPC.RPC
 		/// <summary>
 		/// The rate of poll to the discord pipe.
 		/// </summary>
-		public static readonly int POLL_RATE = 1000;
+		public const int POLL_RATE = 1000;
 
 		/// <summary>
 		/// Should we send a null presence on the fairwells?
@@ -117,7 +117,7 @@ namespace DiscordRPC.RPC
 		private readonly uint _maxRxQueueSize;              //The max size of the RX queue
 		private Queue<IMessage> _rxqueue;                   //The receive queue
 
-		private AutoResetEvent queueUpdatedEvent = new AutoResetEvent(false);
+        private AutoResetEvent queueUpdatedEvent { get; set; } = new AutoResetEvent(false);
 		private BackoffDelay delay;                     //The backoff delay before reconnecting.
 		#endregion
 
@@ -287,193 +287,180 @@ namespace DiscordRPC.RPC
 				Logger.Trace("============================");
 			}
 
-			//Forever trying to connect unless the abort signal is sent
-			//Keep Alive Loop
-			while (!aborting && !shutdown)
-			{
-				try
-				{
-					//Wrap everything up in a try get
-					//Dispose of the pipe if we have any (could be broken)
-					if (namedPipe == null)
-					{
-						Logger.Error("Something bad has happened with our pipe client!");
-						aborting = true;
-						return;
-					}
+            // Use timer instead of wait handle and loop.
+            System.Timers.Timer timer = new(POLL_RATE);
+            timer.Elapsed += TryReadFrame;
+            timer.Start();
+        }
 
-					//Connect to a new pipe
-					Logger.Trace("Connecting to the pipe through the {0}", namedPipe.GetType().FullName);
-					if (namedPipe.Connect(targetPipe))
-					{
-						#region Connected
-						//We connected to a pipe! Reset the delay
-						Logger.Trace("Connected to the pipe. Attempting to establish handshake...");
+        private void TryReadFrame(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            System.Timers.Timer timerSender = (System.Timers.Timer)sender;
+            timerSender.Stop(); // Suspend the ticks until we can continue
+
+            try
+            {
+                //Trying to connect unless the abort signal is sent
+                if (!namedPipe.IsConnected && !aborting && !shutdown)
+                {
+                    try
+                    {
+                        //Wrap everything up in a try get
+                        //Dispose of the pipe if we have any (could be broken)
+                        if (namedPipe == null)
+                        {
+                            Logger.Error("Something bad has happened with our pipe client!");
+                            aborting = true;
+                            return;
+                        }
+
+                        //Connect to a new pipe
+                        Logger.Trace("Connecting to the pipe through the {0}", namedPipe.GetType().FullName);
+                        if (namedPipe.Connect(targetPipe))
+                        {
+                            #region Connected
+                            //We connected to a pipe! Reset the delay
+                            Logger.Trace("Connected to the pipe. Attempting to establish handshake...");
 
 #pragma warning disable CS0618 // We know ConnectedPipe is obsolete, but we still need to use it for the ConnectionEstablishedMessage
-						EnqueueMessage(new ConnectionEstablishedMessage() { ConnectedPipe = namedPipe.ConnectedPipe });
+                            EnqueueMessage(new ConnectionEstablishedMessage() { ConnectedPipe = namedPipe.ConnectedPipe });
 #pragma warning restore CS0618
 
-						//Attempt to establish a handshake
-						EstablishHandshake();
-						Logger.Trace("Connection Established. Starting reading loop...");
+                            //Attempt to establish a handshake
+                            EstablishHandshake();
+                            Logger.Trace("Connection Established. Starting reading loop...");
+                            #endregion
 
-						//Continously iterate, waiting for the frame
-						//We want to only stop reading if the inside tells us (mainloop), if we are aborting (abort) or the pipe disconnects
-						// We dont want to exit on a shutdown, as we still have information
-						PipeFrame frame;
-						bool mainloop = true;
-						while (mainloop && !aborting && !shutdown && namedPipe.IsConnected)
-						{
-							#region Read Loop
+                            Logger.Trace("Left main read loop for some reason. Aborting: {0}, Shutting Down: {1}", aborting, shutdown);
+                        }
+                        else
+                        {
+                            Logger.Error("Failed to connect for some reason.");
+                            EnqueueMessage(new ConnectionFailedMessage() { FailedPipe = targetPipe });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error("Unhandled Exception: {0}", e.GetType().FullName);
+                        Logger.Error(ex.Message);
+                        Logger.Error(ex.StackTrace);
+                    }
+                }
 
-							//Iterate over every frame we have queued up, processing its contents
-							if (namedPipe.ReadFrame(out frame))
-							{
-								#region Read Payload
-								Logger.Trace("Read Payload: {0}", frame.Opcode);
+                //Iterate over every frame we have queued up, processing its contents
+                while (namedPipe.IsConnected && namedPipe.ReadFrame(out PipeFrame frame))
+                {
+                    try
+                    {
+                        #region Read Payload
+                        Logger.Trace("Read Payload: {0}", frame.Opcode);
 
-								//Do some basic processing on the frame
-								switch (frame.Opcode)
-								{
-									//We have been told by discord to close, so we will consider it an abort
-									case Opcode.Close:
+                        //Do some basic processing on the frame
+                        if (frame.Opcode == Opcode.Close)
+                        {
+                            //We have been told by discord to close, so we will consider it an abort
+                            ClosePayload close = frame.GetObject(JsonSerializationContext.Default.ClosePayload);
+                            Logger.Warning("We have been told to terminate by discord: ({0}) {1}", close.Code, close.Reason);
+                            EnqueueMessage(new CloseMessage() { Code = close.Code, Reason = close.Reason });
+                            aborting = true;
+                            break;
+                        }
 
-										ClosePayload close = frame.GetObject(JsonSerializationContext.Default.ClosePayload);
-										Logger.Warning("We have been told to terminate by discord: ({0}) {1}", close.Code, close.Reason);
-										EnqueueMessage(new CloseMessage() { Code = close.Code, Reason = close.Reason });
-										mainloop = false;
-										break;
+                        //We have pinged, so we will flip it and respond back with pong
+                        if (frame.Opcode == Opcode.Ping)
+                        {
+                            Logger.Trace("PING");
+                            frame.Opcode = Opcode.Pong;
+                            namedPipe.WriteFrame(frame);
+                            continue;
+                        }
 
-									//We have pinged, so we will flip it and respond back with pong
-									case Opcode.Ping:
-										Logger.Trace("PING");
-										frame.Opcode = Opcode.Pong;
-										namedPipe.WriteFrame(frame);
-										break;
+                        //We have ponged? I have no idea if Discord actually sends ping/pongs.
+                        if (frame.Opcode == Opcode.Pong)
+                        {
+                            Logger.Trace("PONG");
+                            continue;
+                        }
 
-									//We have ponged? I have no idea if Discord actually sends ping/pongs.
-									case Opcode.Pong:
-										Logger.Trace("PONG");
-										break;
+                        //A frame has been sent, we should deal with that
+                        if (frame.Opcode == Opcode.Frame && !shutdown)
+                        {
+                            if (frame.Data == null)
+                            {
+                                //We have invalid data, thats not good.
+                                Logger.Error("We received no data from the frame so we cannot get the event payload!");
+                                continue;
+                            }
 
-									//A frame has been sent, we should deal with that
-									case Opcode.Frame:
-										if (shutdown)
-										{
-											//We are shutting down, so skip it
-											Logger.Warning("Skipping frame because we are shutting down.");
-											break;
-										}
+                            //We have a frame, so we are going to process the payload and add it to the stack
+                            EventPayload response = null;
+                            try { response = frame.GetObject(JsonSerializationContext.Default.EventPayload); }
+                            catch (Exception ex)
+                            {
+                                Logger.Error("Failed to parse event! {0}", ex.Message);
+                                Logger.Error("Data: {0}", frame.Message);
+                            }
 
-										if (frame.Data == null)
-										{
-											//We have invalid data, thats not good.
-											Logger.Error("We received no data from the frame so we cannot get the event payload!");
-											break;
-										}
+                            try { if (response != null) ProcessFrame(response); }
+                            catch (Exception ex)
+                            {
+                                Logger.Error("Failed to process event! {0}", ex.Message);
+                                Logger.Error("Data: {0}", frame.Message);
+                            }
+                            continue;
+                        }
 
-										//We have a frame, so we are going to process the payload and add it to the stack
-										EventPayload response = null;
-										try { response = frame.GetObject(JsonSerializationContext.Default.EventPayload); }
-										catch (Exception e)
-										{
-											Logger.Error("Failed to parse event! {0}", e.Message);
-											Logger.Error("Data: {0}", frame.Message);
-										}
+                        //We have a invalid opcode, better terminate to be safe
+                        Logger.Error("Invalid opcode: {0}", frame.Opcode);
+                        return;
 
+                        #endregion
+                    }
+                    finally
+                    {
+                        frame.Dispose();
+                    }
+                }
 
-										try { if (response != null) ProcessFrame(response); }
-										catch (Exception e)
-										{
-											Logger.Error("Failed to process event! {0}", e.Message);
-											Logger.Error("Data: {0}", frame.Message);
-										}
+                if (namedPipe.IsConnected && !shutdown)
+                {
+                    //Process the entire command queue we have left
+                    ProcessCommandQueue();
+                    return;
+                }
 
-										break;
+                //Disconnect from the pipe because something bad has happened. An exception has been thrown or the main read loop has terminated.
+                if (shutdown || aborting)
+                {
+                    //Update our state
+                    SetConnectionState(RpcState.Disconnected);
 
+                    //Terminate the pipe
+                    Logger.Info("Thread Terminated, no longer performing RPC connection.");
+                    namedPipe.Dispose();
+                }
+            }
+            finally
+            {
+                // Make sure to restart the timer to trigger ticks.
+                if (!shutdown)
+                {
+                    timerSender.Start();
+                }
 
-									default:
-									case Opcode.Handshake:
-										//We have a invalid opcode, better terminate to be safe
-										Logger.Error("Invalid opcode: {0}", frame.Opcode);
-										mainloop = false;
-										break;
-								}
+                // Either way, dispose the timer if shutdown signal is triggered.
+                if (shutdown)
+                {
+                    timerSender.Dispose();
+                }
+            }
+        }
 
-								#endregion
-							}
+        #region Reading
 
-							if (!aborting && namedPipe.IsConnected)
-							{
-								//Process the entire command queue we have left
-								ProcessCommandQueue();
-
-								//Wait for some time, or until a command has been queued up
-								queueUpdatedEvent.WaitOne(POLL_RATE);
-							}
-
-							#endregion
-						}
-						#endregion
-
-						Logger.Trace("Left main read loop for some reason. Aborting: {0}, Shutting Down: {1}", aborting, shutdown);
-					}
-					else
-					{
-						Logger.Error("Failed to connect for some reason.");
-						EnqueueMessage(new ConnectionFailedMessage() { FailedPipe = targetPipe });
-					}
-
-					//If we are not aborting, we have to wait a bit before trying to connect again
-					if (!aborting && !shutdown)
-					{
-						//We have disconnected for some reason, either a failed pipe or a bad reading,
-						// so we are going to wait a bit before doing it again
-						long sleep = delay.NextDelay();
-
-						Logger.Trace("Waiting {0}ms before attempting to connect again", sleep);
-						Thread.Sleep(delay.NextDelay());
-					}
-				}
-				//catch(InvalidPipeException e)
-				//{
-				//	Logger.Error("Invalid Pipe Exception: {0}", e.Message);
-				//}
-				catch (Exception e)
-				{
-					Logger.Error("Unhandled Exception: {0}", e.GetType().FullName);
-					Logger.Error(e.Message);
-					Logger.Error(e.StackTrace);
-				}
-				finally
-				{
-					//Disconnect from the pipe because something bad has happened. An exception has been thrown or the main read loop has terminated.
-					if (namedPipe.IsConnected)
-					{
-						//Terminate the pipe
-						Logger.Trace("Closing the named pipe.");
-						namedPipe.Close();
-					}
-
-					//Update our state
-					SetConnectionState(RpcState.Disconnected);
-				}
-			}
-
-			//We have disconnected, so dispose of the thread and the pipe.
-			Logger.Trace("Left Main Loop");
-			if (namedPipe != null)
-				namedPipe.Dispose();
-
-			Logger.Info("Thread Terminated, no longer performing RPC connection.");
-		}
-
-		#region Reading
-
-		/// <summary>Handles the response from the pipe and calls appropriate events and changes states.</summary>
-		/// <param name="response">The response received by the server.</param>
-		private void ProcessFrame(EventPayload response)
+        /// <summary>Handles the response from the pipe and calls appropriate events and changes states.</summary>
+        /// <param name="response">The response received by the server.</param>
+        private void ProcessFrame(EventPayload response)
 		{
 			Logger.Info("Handling Response. Cmd: {0}, Event: {1}", response.Command, response.Event);
 

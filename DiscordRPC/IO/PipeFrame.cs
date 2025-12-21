@@ -1,6 +1,7 @@
-﻿using DiscordRPC.Helper;
-using System;
+﻿using System;
+using System.Buffers;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -10,7 +11,7 @@ namespace DiscordRPC.IO
     /// <summary>
     /// A frame received and sent to the Discord client for RPC communications.
     /// </summary>
-    public struct PipeFrame : IEquatable<PipeFrame>
+    public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
     {
         /// <summary>
         /// The maximum size of a pipe frame (16kb).
@@ -25,7 +26,7 @@ namespace DiscordRPC.IO
         /// <summary>
         /// The length of the frame data
         /// </summary>
-        public uint Length { get { return (uint) Data.Length; } }
+        public uint Length { get; private set; }
 
         /// <summary>
         /// The data in the frame
@@ -53,7 +54,8 @@ namespace DiscordRPC.IO
             PipeFrame frame = new PipeFrame()
             {
                 Opcode = opcode,
-                Data   = null
+                Data   = null,
+                Length = 0
             };
             frame.SetObject(data, jsonTypeInfo);
 
@@ -69,13 +71,22 @@ namespace DiscordRPC.IO
         /// Sets the data based of a string
         /// </summary>
         /// <param name="str"></param>
-        private void SetMessage(string str) { Data = MessageEncoding.GetBytes(str); }
+        private void SetMessage(string str)
+        {
+            int maxDataBytes = MessageEncoding.GetByteCount(str);
+            Data = ArrayPool<byte>.Shared.Rent(maxDataBytes);
+            Length = (uint)MessageEncoding.GetBytes(str, Data);
+        }
 
         /// <summary>
         /// Gets a string based of the data
         /// </summary>
         /// <returns></returns>
-        private string GetMessage() { return MessageEncoding.GetString(Data); }
+        private string GetMessage()
+        {
+            Span<byte> dataSpan = Data;
+            return MessageEncoding.GetString(dataSpan[..(int)Length]);
+        }
 
         /// <summary>
         /// Sets the opcodes and serializes the object into a json string.
@@ -115,71 +126,28 @@ namespace DiscordRPC.IO
         /// <summary>
         /// Attempts to read the contents of the frame from the stream
         /// </summary>
-        /// <param name="stream"></param>
-        /// <returns></returns>
-        public bool ReadStream(Stream stream)
+        public bool ReadBuffer(Span<byte> frameBuffer)
         {
-            // Try to read the opcode
-            if (!TryReadUInt32(stream, out uint op))
-                return false;
-
-            // Try to read the length
-            if (!TryReadUInt32(stream, out uint len))
-                return false;
-
-            uint readsRemaining = len;
-
-            // Read the contents
-            using (var mem = new MemoryStream())
+            if (frameBuffer.Length < 8) // sizeof(long)
             {
-                uint chunkSize = (uint)Min(2048, len); // read in chunks of 2KB
-                byte[] buffer = new byte[chunkSize];
-                int bytesRead;
-                while ((bytesRead = stream.Read(buffer, 0, Min(buffer.Length, readsRemaining))) > 0)
-                {
-                    readsRemaining -= chunkSize;
-                    mem.Write(buffer, 0, bytesRead);
-                }
-
-                byte[] result = mem.ToArray();
-                if (result.LongLength != len)
-                    return false;
-
-                Opcode = (Opcode)op;
-                Data = result;
-                return true;
-            }
-        }
-
-        /// <summary>
-        /// Returns minimum value between a int and a unsigned int
-        /// </summary>
-        private int Min(int a, uint b)
-        {
-            if (b >= a) return a;
-            return (int) b;
-        }
-
-        /// <summary>
-        /// Attempts to read a UInt32
-        /// </summary>
-        /// <param name="stream"></param>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        private bool TryReadUInt32(Stream stream, out uint value)
-        {
-            // Read the bytes available to us
-            byte[] bytes = new byte[4];
-            int cnt = stream.Read(bytes, 0, bytes.Length);
-
-            // Make sure we actually have a valid value
-            if (cnt != 4)
-            {
-                value = default(uint);
                 return false;
             }
 
-            value = BitConverter.ToUInt32(bytes, 0);
+            Opcode = MemoryMarshal.Read<Opcode>(frameBuffer);
+            Length = MemoryMarshal.Read<uint>(frameBuffer[4..]);
+
+            scoped Span<byte> dataBuffer = frameBuffer.Slice(8, (int)Length);
+
+            Data = ArrayPool<byte>.Shared.Rent((int)Length);
+            scoped Span<byte> toCopyBufferSpan = Data.AsSpan(0, (int)Length);
+            if (toCopyBufferSpan.Length < dataBuffer.Length ||
+                !dataBuffer.TryCopyTo(toCopyBufferSpan))
+            {
+                ArrayPool<byte>.Shared.Return(Data);
+                Data = null;
+                return false;
+            }
+
             return true;
         }
 
@@ -189,18 +157,26 @@ namespace DiscordRPC.IO
         /// <param name="stream"></param>
         public void WriteStream(Stream stream)
         {
-            // Get all the bytes
-            byte[] op = BitConverter.GetBytes((uint) Opcode);
-            byte[] len = BitConverter.GetBytes(Length);
+            int dataLength = 8 + (int)Length;
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(dataLength);
+            scoped Span<byte> bufferSpan = buffer.AsSpan(0, dataLength);
+            try
+            {
+                MemoryMarshal.Write(bufferSpan, Opcode);
+                MemoryMarshal.Write(bufferSpan[4..], Length);
 
-            // Copy it all into a buffer
-            byte[] buff = new byte[op.Length + len.Length + Data.Length];
-            op.CopyTo(buff, 0);
-            len.CopyTo(buff, op.Length);
-            Data.CopyTo(buff, op.Length + len.Length);
+                // Copy it all into a buffer
+                scoped Span<byte> contentData = bufferSpan[8..];
+                scoped Span<byte> sourceData = Data.AsSpan(0, (int)Length);
+                sourceData.CopyTo(contentData);
 
-            // Write it to the stream
-            stream.Write(buff, 0, buff.Length);
+                // Write it to the stream
+                stream.Write(bufferSpan);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         /// <summary>
@@ -212,7 +188,16 @@ namespace DiscordRPC.IO
         {
             return Opcode == other.Opcode &&
                     Length == other.Length &&
-                    Data == other.Data;
+                    Data.AsSpan(0, (int)Length).SequenceEqual(other.Data.AsSpan(0, (int)other.Length));
+        }
+
+        public readonly void Dispose()
+        {
+            if (Data != null)
+            {
+                ArrayPool<byte>.Shared.Return(Data);
+            }
+            GC.SuppressFinalize(this);
         }
     }
 }
