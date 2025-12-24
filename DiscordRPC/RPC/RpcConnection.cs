@@ -307,7 +307,6 @@ namespace DiscordRPC.RPC
             }
 
             Timer.Stop(); // Pause the timer while we process
-            Logger?.Trace($"Updated from instance with hash: {GetHashCode()}");
 
             try
             {
@@ -356,7 +355,7 @@ namespace DiscordRPC.RPC
 
                         //Attempt to establish a handshake
                         EstablishHandshake();
-                        Logger.Trace("Connection Established. Starting reading loop...");
+                        Logger.Trace($"Connection Established. Starting reading RPC frames with {POLL_RATE}ms interval...");
                         #endregion
                     }
                     else
@@ -371,8 +370,7 @@ namespace DiscordRPC.RPC
                 bool mainloop = true;
                 while (mainloop && namedPipe.IsConnected)
                 {
-                    bool isRead = namedPipe.ReadFrame(out PipeFrame frame);
-                    if (isRead)
+                    if (namedPipe.ReadFrame(out PipeFrame frame))
                     {
                         #region Read Frame
                         Logger.Trace("Read Payload: {0}", frame.Opcode);
