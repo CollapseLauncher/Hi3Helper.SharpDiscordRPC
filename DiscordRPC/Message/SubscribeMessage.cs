@@ -1,35 +1,37 @@
 using DiscordRPC.RPC.Payload;
 
-namespace DiscordRPC.Message
+namespace DiscordRPC.Message;
+
+/// <summary>
+/// Called as validation of subscribe
+/// </summary>
+public class SubscribeMessage : MessageBase
 {
     /// <summary>
-    /// Called as validation of a subscribe
+    /// The type of message received from discord
     /// </summary>
-    public class SubscribeMessage : IMessage
+    public override MessageType Type => MessageType.Subscribe;
+
+    /// <summary>
+    /// The event that was subscribed too.
+    /// </summary>
+    public EventType Event { get; internal set; }
+
+    internal SubscribeMessage(ServerEvent evt)
     {
-        /// <summary>
-        /// The type of message received from discord
-        /// </summary>
-        public override MessageType Type { get { return MessageType.Subscribe; } }
+        switch (evt)
+        {
+            case ServerEvent.ActivityJoin:
+            case ServerEvent.Ready:
+            case ServerEvent.Error:
+            case ServerEvent.ActivitySpectate:
+            default:
+                Event = EventType.Join;
+                break;
 
-		/// <summary>
-		/// The event that was subscribed too.
-		/// </summary>
-		public EventType Event { get; internal set; }
-
-		internal SubscribeMessage(ServerEvent evt)
-		{
-			switch (evt)
-			{
-				default:
-				case ServerEvent.ActivityJoin:
-					Event = EventType.Join;
-					break;
-
-				case ServerEvent.ActivityJoinRequest:
-					Event = EventType.JoinRequest;
-					break;
-			}
-		}
-	}
+            case ServerEvent.ActivityJoinRequest:
+                Event = EventType.JoinRequest;
+                break;
+        }
+    }
 }

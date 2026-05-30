@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using DiscordRPC.Entities;
+using System.Text.Json.Serialization;
 // ReSharper disable UnusedAutoPropertyAccessor.Global
 
 namespace DiscordRPC.Message
@@ -6,17 +7,17 @@ namespace DiscordRPC.Message
     /// <summary>
     /// Called when some other person has requested access to this game. C -> D -> C.
     /// </summary>
-    public class JoinRequestMessage : IMessage
+    public class JoinRequestMessage : MessageBase
     {
         /// <summary>
         /// The type of message received from discord
         /// </summary>
-        public override MessageType Type { get { return MessageType.JoinRequest; } }
+        public override MessageType Type => MessageType.JoinRequest;
 
         /// <summary>
         /// The discord user that is requesting access.
         /// </summary>
         [JsonPropertyName("user")]
-        public User User { get; internal set; }
+        public User? User { get; internal set; }
     }
 }

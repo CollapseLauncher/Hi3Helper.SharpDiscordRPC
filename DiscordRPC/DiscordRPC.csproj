@@ -12,6 +12,7 @@
     <Company>Collapse Launcher Team</Company>
     <Authors>Lachee -&gt; $(Company). neon-nyan, Cry0, bagusnl, shatyuka, gablm.</Authors>
     <Copyright>Copyright 2022-2026 $(Company)</Copyright>
+    <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWin32Manifest>true</NoWin32Manifest>

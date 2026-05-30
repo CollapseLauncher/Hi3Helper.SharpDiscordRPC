@@ -1,9 +1,8 @@
 ﻿using DiscordRPC.RPC.Payload;
 
-namespace DiscordRPC.RPC.Commands
+namespace DiscordRPC.RPC.Commands;
+
+internal interface ICommand
 {
-    internal interface ICommand
-    {
-        IPayload PreparePayload(long nonce);
-    }
+    PayloadBase PreparePayload(long nonce);
 }

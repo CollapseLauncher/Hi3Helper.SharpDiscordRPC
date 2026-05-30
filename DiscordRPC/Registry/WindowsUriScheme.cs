@@ -2,104 +2,95 @@
 #define HAS_RUNTIME_INFORMATION
 #endif
 
-using DiscordRPC.Logging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
 using System;
+using System.Runtime.InteropServices;
+#pragma warning disable CA1873
 
-namespace DiscordRPC.Registry
+namespace DiscordRPC.Registry;
+
+/// <summary>
+/// Registers a URI scheme on Windows.
+/// </summary>
+public sealed class WindowsUriScheme : IRegisterUriScheme
 {
+    private readonly ILogger? _logger;
+
     /// <summary>
-    /// Registers a URI scheme on Windows.
+    /// Initializes a new instance of the <see cref="WindowsUriScheme"/> class.
     /// </summary>
-    public sealed class WindowsUriScheme : IRegisterUriScheme
+    /// <param name="logger"></param>
+    public WindowsUriScheme(ILogger? logger)
     {
-        private ILogger logger;
+        _logger = logger;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="WindowsUriScheme"/> class.
-        /// </summary>
-        /// <param name="logger"></param>
-        public WindowsUriScheme(ILogger logger)
+    /// <inheritdoc/>
+    public bool Register(SchemeInfo info)
+    {
+        //Prepare our location
+        string location = info.ExecutablePath;
+
+        //Prepare the Scheme, Friendly name, default icon and default command
+        string schemePath = $"discord-{info.ApplicationID}";
+        string friendlyName = $"Run game {info.ApplicationID} protocol";
+        string command = location;
+
+        //We have a steam ID, so attempt to replace the command with a steam command
+        if (info.UsingSteamApp)
         {
-            this.logger = logger;
+            //Try to get the steam location. If found, set the command to a run steam instead.
+            string? steam = GetSteamLocation();
+            command = $"\"{steam}\" steam://rungameid/{info.SteamAppID}";
         }
 
-        /// <inheritdoc/>
-        public bool Register(SchemeInfo info)
-        {
-            //Prepare our location
-            string location = info.ExecutablePath;
-            if (location == null)
-            {
-                logger.Error("Failed to register application because the location was null.");
-                return false;
-            }
+        //Okay, now actually register it
+        CreateUriScheme(schemePath, friendlyName, location, command);
+        return true;
+    }
 
-            //Prepare the Scheme, Friendly name, default icon and default command
-            string schemePath = $"discord-{info.ApplicationID}";
-            string friendlyName = $"Run game {info.ApplicationID} protocol";
-            string defaultIcon = location;
-            string command = location;
-
-            //We have a steam ID, so attempt to replce the command with a steam command
-            if (info.UsingSteamApp)
-            {
-                //Try to get the steam location. If found, set the command to a run steam instead.
-                string steam = GetSteamLocation();
-                if (steam != null)
-                    command = string.Format("\"{0}\" steam://rungameid/{1}", steam, info.SteamAppID);
-
-            }
-
-            //Okay, now actually register it
-            CreateUriScheme(schemePath, friendlyName, defaultIcon, command);
-            return true;
-        }
-
-        /// <summary>
-        /// Creates the actual scheme
-        /// </summary>
-        /// <param name="scheme"></param>
-        /// <param name="friendlyName"></param>
-        /// <param name="defaultIcon"></param>
-        /// <param name="command"></param>
-        private void CreateUriScheme(string scheme, string friendlyName, string defaultIcon, string command)
-        {
+    /// <summary>
+    /// Creates the actual scheme
+    /// </summary>
+    /// <param name="scheme"></param>
+    /// <param name="friendlyName"></param>
+    /// <param name="defaultIcon"></param>
+    /// <param name="command"></param>
+    private void CreateUriScheme(string scheme, string friendlyName, string defaultIcon, string command)
+    {
 #if HAS_RUNTIME_INFORMATION
-            if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
-                throw new PlatformNotSupportedException("Requires Windows to use the Registry");
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            throw new PlatformNotSupportedException("Requires Windows to use the Registry");
 #endif
 
-            using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($"SOFTWARE\\Classes\\{scheme}"))
-            {
-                key.SetValue("", $"URL:{friendlyName}");
-                key.SetValue("URL Protocol", "");
+        using (RegistryKey key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"SOFTWARE\Classes\{scheme}"))
+        {
+            key.SetValue("", $"URL:{friendlyName}");
+            key.SetValue("URL Protocol", "");
 
-                using (var iconKey = key.CreateSubKey("DefaultIcon"))
-                    iconKey.SetValue("", defaultIcon);
+            using (RegistryKey iconKey = key.CreateSubKey("DefaultIcon"))
+                iconKey.SetValue("", defaultIcon);
 
-                using (var commandKey = key.CreateSubKey("shell\\open\\command"))
-                    commandKey.SetValue("", command);
-            }
-
-            logger.Trace("Registered {0}, {1}, {2}", scheme, friendlyName, command);
+            using (RegistryKey commandKey = key.CreateSubKey(@"shell\open\command"))
+                commandKey.SetValue("", command);
         }
 
-        /// <summary>
-        /// Gets the current location of the steam client
-        /// </summary>
-        /// <returns></returns>
-        public string GetSteamLocation()
-        {
+        _logger?.LogTrace("Registered {a}, {b}, {c}", scheme, friendlyName, command);
+    }
+
+    /// <summary>
+    /// Gets the current location of the steam client
+    /// </summary>
+    /// <returns></returns>
+    public static string? GetSteamLocation()
+    {
 #if HAS_RUNTIME_INFORMATION
-            if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
-                throw new PlatformNotSupportedException("Requires Windows to use the Registry");
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            throw new PlatformNotSupportedException("Requires Windows to use the Registry");
 #endif
 
-            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Valve\\Steam"))
-            {
-                if (key == null) return null;
-                return key.GetValue("SteamExe") as string;
-            }
-        }
+        using RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+        return key?.GetValue("SteamExe") as string;
     }
 }

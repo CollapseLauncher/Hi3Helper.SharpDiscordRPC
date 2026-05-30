@@ -16,7 +16,7 @@ namespace DiscordRPC
 		/// <summary>
 		/// Called when the Discord Client wishes to enter a game to spectate
 		/// </summary>
-		[System.Obsolete("Spectating is no longer supported by Discord.")]
+		[Obsolete("Spectating is no longer supported by Discord.")]
 		Spectate = 0x1,
 
         /// <summary>

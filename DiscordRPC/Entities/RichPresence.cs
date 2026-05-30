@@ -2,659 +2,649 @@ using DiscordRPC.Exceptions;
 using DiscordRPC.Helper;
 using System;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
+// ReSharper disable UnusedMember.Global
 
-namespace DiscordRPC
+namespace DiscordRPC.Entities;
+
+/// <summary>
+/// The base rich presence structure
+/// </summary>
+[Serializable]
+public class BaseRichPresence
 {
     /// <summary>
-    /// The base rich presence structure
+    /// The user's current <see cref="Party"/> status. For example, "Playing Solo" or "With Friends".
+    /// <para>Max 128 characters</para>
     /// </summary>
-    [Serializable]
-    public class BaseRichPresence
+    [JsonPropertyName("state")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? State
     {
-        /// <summary>
-        /// The user's current <see cref="Party"/> status. For example, "Playing Solo" or "With Friends".
-        /// <para>Max 128 characters</para>
-        /// </summary>
-        [JsonPropertyName("state")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string State
+        get;
+        set
         {
-            get { return _state; }
-            set
-            {
-                if (!ValidateString(value, out _state, false, 128))
-                    throw new StringOutOfRangeException("State", 0, 128);
-            }
-        }
-
-        /// <summary>Inernal inner state string</summary>
-        protected internal string _state;
-
-        /// <summary>
-        /// URL that is linked to when clicking on the details text in the activity card.
-        /// <para>Max 256 characters</para>
-        /// </summary>
-        [JsonPropertyName("state_url")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string StateUrl
-        {
-            get { return _stateUrl; }
-            set
-            {
-                if (!ValidateString(value, out _stateUrl, false, 256))
-                    throw new StringOutOfRangeException(256);
-
-                if (!ValidateUrl(_stateUrl))
-                    throw new ArgumentException("Url must be a valid URI");
-            }
-        }
-        /// <summary>Inernal inner state URL string</summary>
-        protected internal string _stateUrl;
-
-        /// <summary>
-        /// What the user is currently doing. For example, "Competitive - Total Mayhem".
-        /// <para>Max 128 characters</para>
-        /// </summary>
-        [JsonPropertyName("details")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string Details
-        {
-            get { return _details; }
-            set
-            {
-                if (!ValidateString(value, out _details, false, 128))
-                    throw new StringOutOfRangeException(128);
-            }
-        }
-        /// <summary>Inernal inner detail string</summary>
-        protected internal string _details;
-
-        /// <summary>
-        /// URL that is linked to when clicking on the details text in the activity card.
-        /// <para>Max 256 characters</para>
-        /// </summary>
-        [JsonPropertyName("details_url")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string DetailsUrl
-        {
-            get { return _detailsUrl; }
-            set
-            {
-                if (!ValidateString(value, out _detailsUrl, false, 256))
-                    throw new StringOutOfRangeException(256);
-
-                if (!ValidateUrl(_detailsUrl))
-                    throw new ArgumentException("Url must be a valid URI");
-            }
-        }
-        /// <summary>Inernal inner detail URL string</summary>
-        protected internal string _detailsUrl;
-
-        /// <summary>
-        /// The time elapsed / remaining time data.
-        /// </summary>
-        [JsonPropertyName("timestamps")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Timestamps Timestamps { get; set; }
-
-        /// <summary>
-        /// The names of the images to use and the tooltips to give those images.
-        /// </summary>
-        [JsonPropertyName("assets")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Assets Assets { get; set; }
-
-        /// <summary>
-        /// The party the player is currently in. The <see cref="Party.ID"/> must be set for this to be included in the RichPresence update.
-        /// </summary>
-        [JsonPropertyName("party")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Party Party { get; set; }
-
-        /// <summary>
-        /// The secrets used for Joining. Secrets are obfuscated data of your choosing. They could be match ids, player ids, lobby ids, etc. Make this object null if you do not wish too / unable too implement the Join / Request feature.
-        /// <para>To keep security on the up and up, Discord requires that you properly hash/encode/encrypt/put-a-padlock-on-and-swallow-the-key-but-wait-then-how-would-you-open-it your secrets.</para>
-        /// <para>Visit the <see href="https://discordapp.com/developers/docs/rich-presence/how-to#secrets">Rich Presence How-To</see> for more information.</para>
-        /// </summary>
-        [JsonPropertyName("secrets")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Secrets Secrets { get; set; }
-
-        /// <summary>
-        /// The activity type
-        /// </summary>
-        [JsonPropertyName("type")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public ActivityType Type { get; set; }
-
-        /// <summary>
-        /// The display type for the status
-        /// </summary>
-        [JsonPropertyName("status_display_type")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public StatusDisplayType StatusDisplay { get; set; }
-
-        #region Has Checks
-        /// <summary>
-        /// Does the Rich Presence have valid timestamps?
-        /// </summary>
-        /// <returns></returns>
-        public bool HasTimestamps()
-        {
-            return this.Timestamps != null && (Timestamps.Start != null || Timestamps.End != null);
-        }
-
-        /// <summary>
-        /// Does the Rich Presence have valid assets?
-        /// </summary>
-        /// <returns></returns>
-        public bool HasAssets()
-        {
-            return this.Assets != null;
-        }
-
-        /// <summary>
-        /// Does the Rich Presence have a valid party?
-        /// </summary>
-        /// <returns></returns>
-        public bool HasParty()
-        {
-            return this.Party != null && this.Party.ID != null;
-        }
-
-        /// <summary>
-        /// Does the Rich Presence have valid secrets?
-        /// </summary>
-        /// <returns></returns>
-        public bool HasSecrets()
-        {
-#pragma warning disable CS0618 // Type or member is obsolete
-            return Secrets != null && (Secrets.Join != null || Secrets.SpectateSecret != null);
-#pragma warning restore CS0618 // Type or member is obsolete
-        }
-
-        #endregion
-
-        /// <summary>
-        /// Attempts to call <see cref="StringTools.GetNullOrString(string)"/> on the string and return the result, if its within a valid length.
-        /// </summary>
-        /// <param name="str">The string to check</param>
-        /// <param name="result">The formatted string result</param>
-        /// <param name="useBytes">True if you need to validate the string by byte length</param>
-        /// <param name="length">The maximum number of bytes/characters the string can take up</param>
-        /// <param name="encoding">The encoding to count the bytes with, optional</param>
-        /// <returns>True if the string fits within the number of bytes</returns>
-        internal static bool ValidateString(string str, out string result, bool useBytes, int length, Encoding encoding = null)
-        {
-            result = str;
-            if (str == null)
-                return true;
-
-            //Trim the string, for the best chance of fitting
-            var s = str.Trim();
-
-            //Make sure it fits
-            if (useBytes && !s.WithinLength(length, encoding) || s.Length > length)
-                return false;
-
-            //Make sure its not empty
-            result = s.GetNullOrString();
-            return true;
-        }
-
-        /// <summary>
-        /// Validates URLs.
-        /// </summary>
-        /// <param name="url">The URL to check</param>
-        /// <returns>True if the URL is valid</returns>
-        internal static bool ValidateUrl(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return true;
-
-            //Check if the URL is valid
-            if (!Uri.TryCreate(url, UriKind.Absolute, out _))
-                return false;
-
-            return true;
-        }
-
-        /// <summary>
-        /// Operator that converts a presence into a boolean for null checks.
-        /// </summary>
-        /// <param name="presence"></param>
-        public static implicit operator bool(BaseRichPresence presence)
-        {
-            return presence != null;
-        }
-
-        /// <summary>
-        /// Checks if the other rich presence differs from the current one
-        /// </summary>
-        /// <param name="other"></param>
-        /// <returns></returns>
-        internal virtual bool Matches(RichPresence other)
-        {
-            if (other == null)
-                return false;
-
-            if (State != other.State ||
-                StateUrl != other.StateUrl ||
-                Details != other.Details ||
-                DetailsUrl != other.DetailsUrl ||
-                Type != other.Type)
-                return false;
-
-            //Checks if the timestamps are different
-            if (Timestamps != null)
-            {
-                if (other.Timestamps == null ||
-                    other.Timestamps.StartUnixMilliseconds != Timestamps.StartUnixMilliseconds ||
-                    other.Timestamps.EndUnixMilliseconds != Timestamps.EndUnixMilliseconds)
-                    return false;
-            }
-            else if (other.Timestamps != null)
-            {
-                return false;
-            }
-
-            //Checks if the secrets are different
-            if (Secrets != null)
-            {
-#pragma warning disable CS0618 // Type or member is obsolete
-                if (other.Secrets == null ||
-                    other.Secrets.Join != Secrets.Join ||
-                    other.Secrets.SpectateSecret != Secrets.SpectateSecret)
-                    return false;
-#pragma warning restore CS0618 // Type or member is obsolete
-            }
-            else if (other.Secrets != null)
-            {
-                return false;
-            }
-
-            //Checks if the timestamps are different
-            if (Party != null)
-            {
-                if (other.Party == null ||
-                    other.Party.ID != Party.ID ||
-                    other.Party.Max != Party.Max ||
-                    other.Party.Size != Party.Size ||
-                    other.Party.Privacy != Party.Privacy)
-                    return false;
-            }
-            else if (other.Party != null)
-            {
-                return false;
-            }
-
-            //Checks if the assets are different
-            if (Assets != null)
-            {
-                if (other.Assets == null ||
-                    other.Assets.LargeImageKey != Assets.LargeImageKey ||
-                    other.Assets.LargeImageText != Assets.LargeImageText ||
-                    other.Assets.LargeImageUrl != Assets.LargeImageUrl ||
-                    other.Assets.SmallImageKey != Assets.SmallImageKey ||
-                    other.Assets.SmallImageText != Assets.SmallImageText ||
-                    other.Assets.SmallImageUrl != Assets.SmallImageUrl)
-                    return false;
-            }
-            else if (other.Assets != null)
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Converts this BaseRichPresence to RichPresence
-        /// </summary>
-        /// <returns></returns>
-        public RichPresence ToRichPresence()
-        {
-            var presence = new RichPresence();
-            presence.State = State;
-            presence.StateUrl = StateUrl;
-            presence.Details = Details;
-            presence.DetailsUrl = DetailsUrl;
-            presence.Type = Type;
-            presence.StatusDisplay = StatusDisplay;
-
-            presence.Party = !HasParty() ? Party : null;
-            presence.Secrets = !HasSecrets() ? Secrets : null;
-
-            if (HasAssets())
-            {
-                presence.Assets = new Assets()
-                {
-                    SmallImageKey = Assets.SmallImageKey,
-                    SmallImageText = Assets.SmallImageText,
-                    SmallImageUrl = Assets.SmallImageUrl,
-
-                    LargeImageKey = Assets.LargeImageKey,
-                    LargeImageText = Assets.LargeImageText,
-                    LargeImageUrl = Assets.LargeImageUrl
-                };
-            }
-
-            if (HasTimestamps())
-            {
-                presence.Timestamps = new Timestamps();
-                if (Timestamps.Start.HasValue) presence.Timestamps.Start = Timestamps.Start;
-                if (Timestamps.End.HasValue) presence.Timestamps.End = Timestamps.End;
-            }
-
-            return presence;
+            if (!ValidateString(value, out field, false, 128))
+                throw new StringOutOfRangeException("State", 0, 128);
         }
     }
 
     /// <summary>
-    /// The Rich Presence structure that will be sent and received by Discord. Use this class to build your presence and update it appropriately.
+    /// URL that is linked to when clicking on the details text in the activity card.
+    /// <para>Max 256 characters</para>
     /// </summary>
-    // This is broken up in this way because the response inherits the BaseRichPresence.
-    public sealed class RichPresence : BaseRichPresence
+    [JsonPropertyName("state_url")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StateUrl
     {
-        /// <summary>
-        /// The buttons to display in the presence. 
-        /// <para>Max of 2</para>
-        /// </summary>
-        [JsonPropertyName("buttons")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public Button[] Buttons { get; set; }
-
-        /// <summary>
-        /// Does the Rich Presence have any buttons?
-        /// </summary>
-        /// <returns></returns>
-        public bool HasButtons()
+        get;
+        set
         {
-            return Buttons != null && Buttons.Length > 0;
+            if (!ValidateString(value, out field, false, 256))
+                throw new StringOutOfRangeException(256);
+
+            if (!ValidateUrl(field))
+                throw new ArgumentException("Url must be a valid URI");
         }
+    }
 
-
-        #region Builder
-        /// <summary>
-        /// Sets the state of the Rich Presence. See also <seealso cref="BaseRichPresence.State"/>.
-        /// </summary>
-        /// <param name="state">The user's current <see cref="Party"/> status.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithState(string state)
+    /// <summary>
+    /// What the user is currently doing. For example, "Competitive - Total Mayhem".
+    /// <para>Max 128 characters</para>
+    /// </summary>
+    [JsonPropertyName("details")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Details
+    {
+        get;
+        set
         {
-            State = state;
-            return this;
+            if (!ValidateString(value, out field, false, 128))
+                throw new StringOutOfRangeException(128);
         }
+    }
 
-        /// <summary>
-        /// Sets the state URL of the Rich Presence. See also <seealso cref="BaseRichPresence.StateUrl"/>.
-        /// </summary>
-        /// <param name="stateUrl">State URL when clicking on the state text.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithStateUrl(string stateUrl)
+    /// <summary>
+    /// URL that is linked to when clicking on the details text in the activity card.
+    /// <para>Max 256 characters</para>
+    /// </summary>
+    [JsonPropertyName("details_url")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DetailsUrl
+    {
+        get;
+        set
         {
-            StateUrl = stateUrl;
-            return this;
+            if (!ValidateString(value, out field, false, 256))
+                throw new StringOutOfRangeException(256);
+
+            if (!ValidateUrl(field))
+                throw new ArgumentException("Url must be a valid URI");
         }
+    }
 
-        /// <summary>
-        /// Sets the details of the Rich Presence. See also <seealso cref="BaseRichPresence.Details"/>.
-        /// </summary>
-        /// <param name="details">What the user is currently doing.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithDetails(string details)
-        {
-            Details = details;
-            return this;
-        }
+    /// <summary>
+    /// The time elapsed / remaining time data.
+    /// </summary>
+    [JsonPropertyName("timestamps")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Timestamps? Timestamps { get; set; }
 
-        /// <summary>
-        /// Sets the details URL of the Rich Presence. See also <seealso cref="BaseRichPresence.DetailsUrl"/>.
-        /// </summary>
-        /// <param name="detailsUrl">Details URL when clicking on the details text.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithDetailsUrl(string detailsUrl)
-        {
-            DetailsUrl = detailsUrl;
-            return this;
-        }
+    /// <summary>
+    /// The names of the images to use and the tooltips to give those images.
+    /// </summary>
+    [JsonPropertyName("assets")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Assets? Assets { get; set; }
 
-        /// <summary>
-        /// Sets the type of the Rich Presence. See also <seealso cref="ActivityType"/>.
-        /// </summary>
-        /// <param name="type">The status type</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithType(ActivityType type)
-        {
-            Type = type;
-            return this;
-        }
-        /// <summary>
-        /// Sets the display type for the status. See also <seealso cref="StatusDisplayType"/>.
-        /// </summary>
-        /// <param name="statusDisplay"></param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithStatusDisplay(StatusDisplayType statusDisplay)
-        {
-            StatusDisplay = statusDisplay;
-            return this;
-        }
+    /// <summary>
+    /// The party the player is currently in. The <see cref="Entities.Party.Id"/> must be set for this to be included in the RichPresence update.
+    /// </summary>
+    [JsonPropertyName("party")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Party? Party { get; set; }
 
-        /// <summary>
-        /// Sets the timestamp of the Rich Presence. See also <seealso cref="Timestamps"/>.
-        /// </summary>
-        /// <param name="timestamps">The time elapsed / remaining time data.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithTimestamps(Timestamps timestamps)
-        {
-            Timestamps = timestamps;
-            return this;
-        }
+    /// <summary>
+    /// The secrets used for Joining. Secrets are obfuscated data of your choosing. They could be match ids, player ids, lobby ids, etc. Make this object null if you do not wish too / unable to implement the Join / Request feature.
+    /// <para>To keep security on the up and up, Discord requires that you properly hash/encode/encrypt/put-a-padlock-on-and-swallow-the-key-but-wait-then-how-would-you-open-it your secrets.</para>
+    /// <para>Visit the <see href="https://discordapp.com/developers/docs/rich-presence/how-to#secrets">Rich Presence How-To</see> for more information.</para>
+    /// </summary>
+    [JsonPropertyName("secrets")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Secrets? Secrets { get; set; }
 
-        /// <summary>
-        /// Sets the assets of the Rich Presence. See also <seealso cref="Assets"/>.
-        /// </summary>
-        /// <param name="assets">The names of the images to use and the tooltips to give those images.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithAssets(Assets assets)
-        {
-            Assets = assets;
-            return this;
-        }
+    /// <summary>
+    /// The activity type
+    /// </summary>
+    [JsonPropertyName("type")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ActivityType Type { get; set; }
 
-        /// <summary>
-        /// Sets the Rich Presence's party. See also <seealso cref="Party"/>.
-        /// </summary>
-        /// <param name="party">The party the player is currently in.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithParty(Party party)
-        {
-            Party = party;
-            return this;
-        }
+    /// <summary>
+    /// The display type for the status
+    /// </summary>
+    [JsonPropertyName("status_display_type")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public StatusDisplayType StatusDisplay { get; set; }
 
-        /// <summary>
-        /// Sets the Rich Presence's secrets. See also <seealso cref="Secrets"/>.
-        /// </summary>
-        /// <param name="secrets">The secrets used for Joining.</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithSecrets(Secrets secrets)
-        {
-            Secrets = secrets;
-            return this;
-        }
+    #region Has Checks
+    /// <summary>
+    /// Does the Rich Presence have valid timestamps?
+    /// </summary>
+    /// <returns></returns>
+    public bool HasTimestamps()
+    {
+        return Timestamps != null && (Timestamps.Start != null || Timestamps.End != null);
+    }
 
-        /// <summary>
-        /// Sets the Rich Presence's buttons.
-        /// </summary>
-        /// <param name="topButton">The top button to display</param>
-        /// <param name="bottomButton">The optional bottom button to display</param>
-        /// <returns>The modified Rich Presence.</returns>
-        public RichPresence WithButtons(Button topButton, Button bottomButton = null)
-        {
-            if (topButton != null && bottomButton != null)
-            {
-                Buttons = new Button[] { topButton, bottomButton };
-            }
-            else if (topButton == null && bottomButton == null)
-            {
-                Buttons = default;
-            }
-            else
-            {
-                Buttons = new Button[] { topButton ?? bottomButton };
-            }
+    /// <summary>
+    /// Does the Rich Presence have valid assets?
+    /// </summary>
+    /// <returns></returns>
+    public bool HasAssets()
+    {
+        return Assets != null;
+    }
 
-            return this;
-        }
-        #endregion
+    /// <summary>
+    /// Does the Rich Presence have a valid party?
+    /// </summary>
+    /// <returns></returns>
+    public bool HasParty()
+    {
+        return Party is { Id: not null };
+    }
 
-
-        #region Cloning and Merging 
-
-        /// <summary>
-        /// Clones the presence into a new instance. Used for thread safe writing and reading. This function will ignore properties if they are in a invalid state.
-        /// </summary>
-        /// <returns></returns>
-        public RichPresence Clone()
-        {
-            return new RichPresence
-            {
-                State = this._state != null ? _state.Clone() as string : null,
-                StateUrl = this._stateUrl != null ? _stateUrl.Clone() as string : null,
-                Details = this._details != null ? _details.Clone() as string : null,
-                DetailsUrl = this._detailsUrl != null ? _detailsUrl.Clone() as string : null,
-                Type = this.Type,
-                StatusDisplay = this.StatusDisplay,
-                Buttons = !HasButtons() ? null : this.Buttons.Clone() as Button[],
-
+    /// <summary>
+    /// Does the Rich Presence have valid secrets?
+    /// </summary>
+    /// <returns></returns>
+    public bool HasSecrets()
+    {
 #pragma warning disable CS0618 // Type or member is obsolete
-                Secrets = !HasSecrets() ? null : new Secrets
-                {
-                    //MatchSecret = this.Secrets.MatchSecret?.Clone() as string,
-                    Join = this.Secrets.Join != null ? this.Secrets.Join.Clone() as string : null,
-                    SpectateSecret = this.Secrets.SpectateSecret != null ? this.Secrets.SpectateSecret.Clone() as string : null
-                },
+        return Secrets != null && (Secrets.Join != null || Secrets.SpectateSecret != null);
 #pragma warning restore CS0618 // Type or member is obsolete
+    }
 
-                Timestamps = !HasTimestamps() ? null : new Timestamps
-                {
-                    Start = this.Timestamps.Start,
-                    End = this.Timestamps.End
-                },
+    #endregion
 
-                Assets = !HasAssets() ? null : new Assets
-                {
-                    LargeImageKey = this.Assets.LargeImageKey != null ? this.Assets.LargeImageKey.Clone() as string : null,
-                    LargeImageText = this.Assets.LargeImageText != null ? this.Assets.LargeImageText.Clone() as string : null,
-                    LargeImageUrl = this.Assets.LargeImageUrl != null ? this.Assets.LargeImageUrl.Clone() as string : null,
-                    SmallImageKey = this.Assets.SmallImageKey != null ? this.Assets.SmallImageKey.Clone() as string : null,
-                    SmallImageText = this.Assets.SmallImageText != null ? this.Assets.SmallImageText.Clone() as string : null,
-                    SmallImageUrl = this.Assets.SmallImageUrl != null ? this.Assets.SmallImageUrl.Clone() as string : null,
-                },
+    /// <summary>
+    /// Attempts to call <see cref="StringTools.GetNullOrString(string)"/> on the string and return the result, if it's within a valid length.
+    /// </summary>
+    /// <param name="str">The string to check</param>
+    /// <param name="result">The formatted string result</param>
+    /// <param name="useBytes">True if you need to validate the string by byte length</param>
+    /// <param name="length">The maximum number of bytes/characters the string can take up</param>
+    /// <param name="encoding">The encoding to count the bytes with, optional</param>
+    /// <returns>True if the string fits within the number of bytes</returns>
+    internal static bool ValidateString(string? str, out string? result, bool useBytes, int length, Encoding? encoding = null)
+    {
+        result = str;
+        if (str == null)
+            return true;
 
-                Party = !HasParty() ? null : new Party
-                {
-                    ID = this.Party.ID,
-                    Size = this.Party.Size,
-                    Max = this.Party.Max,
-                    Privacy = this.Party.Privacy,
-                },
+        //Trim the string, for the best chance of fitting
+        string s = str.Trim();
+
+        //Make sure it fits
+        if ((useBytes && !s.WithinLength(length, encoding)) || s.Length > length)
+            return false;
+
+        //Make sure it's not empty
+        result = s.GetNullOrString();
+        return true;
+    }
+
+    /// <summary>
+    /// Validates URLs.
+    /// </summary>
+    /// <param name="url">The URL to check</param>
+    /// <returns>True if the URL is valid</returns>
+    internal static bool ValidateUrl(string? url)
+    {
+        return string.IsNullOrEmpty(url) ||
+               //Check if the URL is valid
+               Uri.TryCreate(url, UriKind.Absolute, out _);
+    }
+
+    /// <summary>
+    /// Operator that converts a presence into a boolean for null checks.
+    /// </summary>
+    /// <param name="presence"></param>
+    public static implicit operator bool(BaseRichPresence? presence)
+    {
+        return presence != null;
+    }
+
+    /// <summary>
+    /// Checks if the other rich presence differs from the current one
+    /// </summary>
+    /// <param name="other"></param>
+    /// <returns></returns>
+    internal virtual bool Matches(RichPresence? other)
+    {
+        if (other == null)
+            return false;
+
+        if (State != other.State ||
+            StateUrl != other.StateUrl ||
+            Details != other.Details ||
+            DetailsUrl != other.DetailsUrl ||
+            Type != other.Type)
+            return false;
+
+        //Checks if the timestamps are different
+        if (Timestamps != null)
+        {
+            if (other.Timestamps == null ||
+                other.Timestamps.StartUnixMilliseconds != Timestamps.StartUnixMilliseconds ||
+                other.Timestamps.EndUnixMilliseconds != Timestamps.EndUnixMilliseconds)
+                return false;
+        }
+        else if (other.Timestamps != null)
+        {
+            return false;
+        }
+
+        //Checks if the secrets are different
+        if (Secrets != null)
+        {
+#pragma warning disable CS0618 // Type or member is obsolete
+            if (other.Secrets == null ||
+                other.Secrets.Join != Secrets.Join ||
+                other.Secrets.SpectateSecret != Secrets.SpectateSecret)
+                return false;
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
+        else if (other.Secrets != null)
+        {
+            return false;
+        }
+
+        //Checks if the timestamps are different
+        if (Party != null)
+        {
+            if (other.Party == null ||
+                other.Party.Id != Party.Id ||
+                other.Party.Max != Party.Max ||
+                other.Party.Size != Party.Size ||
+                other.Party.Privacy != Party.Privacy)
+                return false;
+        }
+        else if (other.Party != null)
+        {
+            return false;
+        }
+
+        //Checks if the assets are different
+        if (Assets != null)
+        {
+            if (other.Assets == null ||
+                other.Assets.LargeImageKey != Assets.LargeImageKey ||
+                other.Assets.LargeImageText != Assets.LargeImageText ||
+                other.Assets.LargeImageUrl != Assets.LargeImageUrl ||
+                other.Assets.SmallImageKey != Assets.SmallImageKey ||
+                other.Assets.SmallImageText != Assets.SmallImageText ||
+                other.Assets.SmallImageUrl != Assets.SmallImageUrl)
+                return false;
+        }
+        else if (other.Assets != null)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Converts this BaseRichPresence to RichPresence
+    /// </summary>
+    /// <returns></returns>
+    public RichPresence ToRichPresence()
+    {
+        RichPresence presence = new()
+        {
+            State         = State,
+            StateUrl      = StateUrl,
+            Details       = Details,
+            DetailsUrl    = DetailsUrl,
+            Type          = Type,
+            StatusDisplay = StatusDisplay,
+            Party         = !HasParty() ? Party : null,
+            Secrets       = !HasSecrets() ? Secrets : null
+        };
+
+        if (HasAssets())
+        {
+            presence.Assets = new Assets
+            {
+                SmallImageKey  = Assets?.SmallImageKey,
+                SmallImageText = Assets?.SmallImageText,
+                SmallImageUrl  = Assets?.SmallImageUrl,
+
+                LargeImageKey  = Assets?.LargeImageKey,
+                LargeImageText = Assets?.LargeImageText,
+                LargeImageUrl  = Assets?.LargeImageUrl
             };
         }
 
-        /// <summary>
-        /// Merges the passed presence with this one, taking into account the image key to image id annoyance.
-        /// </summary>
-        /// <param name="presence"></param>
-        /// <returns>self</returns>
-        internal RichPresence Merge(BaseRichPresence presence)
+        if (!HasTimestamps())
         {
-            this._state = presence.State;
-            this._stateUrl = presence.StateUrl;
-            this._details = presence.Details;
-            this._detailsUrl = presence.DetailsUrl;
-            this.Type = presence.Type;
-            this.StatusDisplay = presence.StatusDisplay;
-            this.Party = presence.Party;
-            this.Timestamps = presence.Timestamps;
-            this.Secrets = presence.Secrets;
-
-            //If they have assets, we should merge them
-            if (presence.HasAssets())
-            {
-                //Make sure we actually have assets too
-                if (!this.HasAssets())
-                {
-                    //We dont, so we will just use theirs
-                    this.Assets = presence.Assets;
-                }
-                else
-                {
-                    //We do, so we better merge them!
-                    this.Assets.Merge(presence.Assets);
-                }
-            }
-            else
-            {
-                //They dont have assets, so we will just set ours to null
-                this.Assets = null;
-            }
-
-            return this;
+            return presence;
         }
 
-        internal override bool Matches(RichPresence other)
-        {
-            if (!base.Matches(other)) return false;
+        presence.Timestamps = new Timestamps();
+        if (Timestamps?.Start.HasValue ?? false) presence.Timestamps.Start = Timestamps.Start;
+        if (Timestamps?.End.HasValue ?? false) presence.Timestamps.End     = Timestamps.End;
 
-            //Check buttons
-            if (Buttons == null ^ other.Buttons == null) return false;
-            if (Buttons != null)
-            {
-                if (Buttons.Length != other.Buttons.Length) return false;
-                for (int i = 0; i < Buttons.Length; i++)
-                {
-                    var a = Buttons[i];
-                    var b = other.Buttons[i];
-                    if (a.Label != b.Label || a.Url != b.Url)
-                        return false;
-                }
-            }
+        return presence;
+    }
+}
 
-            return true;
-        }
+/// <summary>
+/// The Rich Presence structure that will be sent and received by Discord. Use this class to build your presence and update it appropriately.
+/// </summary>
+// This is broken up in this way because the response inherits the BaseRichPresence.
+public sealed class RichPresence : BaseRichPresence
+{
+    /// <summary>
+    /// The buttons to display in the presence. 
+    /// <para>Max of 2</para>
+    /// </summary>
+    [JsonPropertyName("buttons")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Button?[]? Buttons { get; set; }
 
-        #endregion
+    /// <summary>
+    /// Does the Rich Presence have any buttons?
+    /// </summary>
+    /// <returns></returns>
+    public bool HasButtons()
+    {
+        return Buttons is { Length: > 0 };
+    }
 
-        /// <summary>
-        /// Operator that converts a presence into a boolean for null checks.
-        /// </summary>
-        /// <param name="presesnce"></param>
-        public static implicit operator bool(RichPresence presesnce)
-        {
-            return presesnce != null;
-        }
+
+    #region Builder
+    /// <summary>
+    /// Sets the state of the Rich Presence. See also <seealso cref="BaseRichPresence.State"/>.
+    /// </summary>
+    /// <param name="state">The user's current <see cref="Party"/> status.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithState(string state)
+    {
+        State = state;
+        return this;
     }
 
     /// <summary>
-    /// A rich presence that has been parsed from the pipe as a response.
+    /// Sets the state URL of the Rich Presence. See also <seealso cref="BaseRichPresence.StateUrl"/>.
     /// </summary>
-    internal sealed class RichPresenceResponse : BaseRichPresence
+    /// <param name="stateUrl">State URL when clicking on the state text.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithStateUrl(string stateUrl)
     {
-        /// <summary>
-        /// ID of the client
-        /// </summary>
-        [JsonPropertyName("application_id")]
-        public string ClientID { get; private set; }
-
-        /// <summary>
-        /// Name of the bot
-        /// </summary>
-        [JsonPropertyName("name")]
-        public string Name { get; private set; }
-
+        StateUrl = stateUrl;
+        return this;
     }
+
+    /// <summary>
+    /// Sets the details of the Rich Presence. See also <seealso cref="BaseRichPresence.Details"/>.
+    /// </summary>
+    /// <param name="details">What the user is currently doing.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithDetails(string details)
+    {
+        Details = details;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the details URL of the Rich Presence. See also <seealso cref="BaseRichPresence.DetailsUrl"/>.
+    /// </summary>
+    /// <param name="detailsUrl">Details URL when clicking on the details text.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithDetailsUrl(string detailsUrl)
+    {
+        DetailsUrl = detailsUrl;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the type of the Rich Presence. See also <seealso cref="ActivityType"/>.
+    /// </summary>
+    /// <param name="type">The status type</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithType(ActivityType type)
+    {
+        Type = type;
+        return this;
+    }
+    /// <summary>
+    /// Sets the display type for the status. See also <seealso cref="StatusDisplayType"/>.
+    /// </summary>
+    /// <param name="statusDisplay"></param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithStatusDisplay(StatusDisplayType statusDisplay)
+    {
+        StatusDisplay = statusDisplay;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the timestamp of the Rich Presence. See also <seealso cref="Timestamps"/>.
+    /// </summary>
+    /// <param name="timestamps">The time elapsed / remaining time data.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithTimestamps(Timestamps timestamps)
+    {
+        Timestamps = timestamps;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the assets of the Rich Presence. See also <seealso cref="Assets"/>.
+    /// </summary>
+    /// <param name="assets">The names of the images to use and the tooltips to give those images.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithAssets(Assets assets)
+    {
+        Assets = assets;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Rich Presence's party. See also <seealso cref="Party"/>.
+    /// </summary>
+    /// <param name="party">The party the player is currently in.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithParty(Party party)
+    {
+        Party = party;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Rich Presence's secrets. See also <seealso cref="Secrets"/>.
+    /// </summary>
+    /// <param name="secrets">The secrets used for Joining.</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithSecrets(Secrets secrets)
+    {
+        Secrets = secrets;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Rich Presence's buttons.
+    /// </summary>
+    /// <param name="topButton">The top button to display</param>
+    /// <param name="bottomButton">The optional bottom button to display</param>
+    /// <returns>The modified Rich Presence.</returns>
+    public RichPresence WithButtons(Button? topButton, Button? bottomButton = null)
+    {
+        if (topButton != null && bottomButton != null)
+        {
+            Buttons = [topButton, bottomButton];
+        }
+        else if (topButton == null && bottomButton == null)
+        {
+            Buttons = null;
+        }
+        else
+        {
+            Buttons = [topButton ?? bottomButton];
+        }
+
+        return this;
+    }
+    #endregion
+
+
+    #region Cloning and Merging 
+
+    /// <summary>
+    /// Clones the presence into a new instance. Used for thread safe writing and reading. This function will ignore properties if they are in an invalid state.
+    /// </summary>
+    /// <returns></returns>
+    public RichPresence Clone()
+    {
+        return new RichPresence
+        {
+            State         = State?.Clone() as string,
+            StateUrl      = StateUrl?.Clone() as string,
+            Details       = Details?.Clone() as string,
+            DetailsUrl    = DetailsUrl?.Clone() as string,
+            Type          = Type,
+            StatusDisplay = StatusDisplay,
+            Buttons       = !HasButtons() ? null : Buttons?.Clone() as Button[],
+
+#pragma warning disable CS0618 // Type or member is obsolete
+            Secrets = !HasSecrets() ? null : new Secrets
+            {
+                //MatchSecret = this.Secrets.MatchSecret?.Clone() as string,
+                Join           = Secrets?.Join?.Clone() as string,
+                SpectateSecret = Secrets?.SpectateSecret?.Clone() as string
+            },
+#pragma warning restore CS0618 // Type or member is obsolete
+
+            Timestamps = !HasTimestamps() ? null : new Timestamps
+            {
+                Start = Timestamps?.Start,
+                End = Timestamps?.End
+            },
+
+            Assets = !HasAssets() ? null : new Assets
+            {
+                LargeImageKey  = Assets?.LargeImageKey?.Clone() as string,
+                LargeImageText = Assets?.LargeImageText?.Clone() as string,
+                LargeImageUrl  = Assets?.LargeImageUrl?.Clone() as string,
+                SmallImageKey  = Assets?.SmallImageKey?.Clone() as string,
+                SmallImageText = Assets?.SmallImageText?.Clone() as string,
+                SmallImageUrl  = Assets?.SmallImageUrl?.Clone() as string
+            },
+
+            Party = !HasParty() ? null : new Party
+            {
+                Id      = Party?.Id,
+                Size    = Party?.Size ?? 0,
+                Max     = Party?.Max ?? 0,
+                Privacy = Party?.Privacy ?? 0
+            }
+        };
+    }
+
+    /// <summary>
+    /// Merges the passed presence with this one, taking into account the image key to image id annoyance.
+    /// </summary>
+    /// <param name="presence"></param>
+    /// <returns>self</returns>
+    internal RichPresence Merge(BaseRichPresence presence)
+    {
+        State         = presence.State;
+        StateUrl      = presence.StateUrl;
+        Details       = presence.Details;
+        DetailsUrl    = presence.DetailsUrl;
+        Type          = presence.Type;
+        StatusDisplay = presence.StatusDisplay;
+        Party         = presence.Party;
+        Timestamps    = presence.Timestamps;
+        Secrets       = presence.Secrets;
+
+        //If they have assets, we should merge them
+        if (presence.HasAssets())
+        {
+            //Make sure we actually have assets too
+            if (!HasAssets())
+            {
+                //We don't, so we will just use theirs
+                Assets = presence.Assets;
+            }
+            else
+            {
+                //We do, so we better merge them!
+                Assets?.Merge(presence.Assets);
+            }
+        }
+        else
+        {
+            //They don't have assets, so we will just set ours to null
+            Assets = null;
+        }
+
+        return this;
+    }
+
+    internal override bool Matches(RichPresence? other)
+    {
+        if (!base.Matches(other)) return false;
+
+        //Check buttons
+        if ((Buttons == null) ^ (other?.Buttons == null)) return false;
+        if (Buttons == null)
+        {
+            return true;
+        }
+
+        if (Buttons.Length != other?.Buttons?.Length) return false;
+        for (int i = 0; i < Buttons.Length; i++)
+        {
+            Button? a = Buttons[i];
+            Button? b = other.Buttons[i];
+            if (a?.Label != b?.Label || a?.Url != b?.Url)
+                return false;
+        }
+
+        return true;
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Operator that converts a presence into a boolean for null checks.
+    /// </summary>
+    /// <param name="presence"></param>
+    public static implicit operator bool(RichPresence? presence)
+    {
+        return presence != null;
+    }
+}
+
+/// <summary>
+/// A rich presence that has been parsed from the pipe as a response.
+/// </summary>
+internal sealed class RichPresenceResponse : BaseRichPresence
+{
+    /// <summary>
+    /// ID of the client
+    /// </summary>
+    [JsonPropertyName("application_id")]
+    public string? ClientID { get; init; }
+
+    /// <summary>
+    /// Name of the bot
+    /// </summary>
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
+
 }

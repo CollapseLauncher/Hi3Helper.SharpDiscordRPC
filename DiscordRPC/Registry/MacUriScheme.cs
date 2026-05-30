@@ -1,81 +1,81 @@
-﻿using DiscordRPC.Logging;
+﻿using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
+// ReSharper disable StringLiteralTypo
+#pragma warning disable CA1873
 
-namespace DiscordRPC.Registry
+namespace DiscordRPC.Registry;
+
+/// <summary>
+/// Registers a URI scheme on MacOS.
+/// </summary>
+public sealed class MacUriScheme : IRegisterUriScheme
 {
+    private readonly ILogger? _logger;
+
+    private static readonly string[] DiscordClientFolders =
+    [
+        "discord",
+        "discordptb",
+        "discordcanary"
+    ];
+
     /// <summary>
-    /// Registers a URI scheme on MacOS.
+    /// Initializes a new instance of the <see cref="MacUriScheme"/> class.
     /// </summary>
-    public sealed class MacUriScheme : IRegisterUriScheme
+    /// <param name="logger"></param>
+    public MacUriScheme(ILogger? logger)
     {
-        private ILogger logger;
+        _logger = logger;
+    }
 
-        private static readonly string[] DiscordClientFolders = new string[]
+    /// <inheritdoc/>
+    public bool Register(SchemeInfo info)
+    {
+        string exe = info.ExecutablePath;
+        if (string.IsNullOrEmpty(exe))
         {
-            "discord",
-            "discordptb",
-            "discordcanary",
-        };
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MacUriScheme"/> class.
-        /// </summary>
-        /// <param name="logger"></param>
-        public MacUriScheme(ILogger logger)
-        {
-            this.logger = logger;
+            _logger?.LogError("Failed to register because the application could not be located.");
+            return false;
         }
 
-        /// <inheritdoc/>
-        public bool Register(SchemeInfo info)
+        _logger?.LogTrace("Registering Steam Command");
+
+        //Prepare the command
+        string command = exe;
+        if (info.UsingSteamApp) command = $"steam://rungameid/{info.SteamAppID}";
+        else _logger?.LogWarning("This library does not fully support MacOS URI Scheme Registration.");
+
+        //get the folder ready
+        foreach (string folder in DiscordClientFolders)
         {
-            string exe = info.ExecutablePath;
-            if (string.IsNullOrEmpty(exe))
+            string discordDirectory = Path.Combine(
+                Environment.GetEnvironmentVariable("HOME") ?? "",
+                "Library/Application Support/",
+                folder
+            );
+
+            if (Directory.Exists(discordDirectory))
             {
-                logger.Error("Failed to register because the application could not be located.");
-                return false;
+                _logger?.LogTrace("Discord client folder exists: {}", discordDirectory);
+                RegisterSchemeForClient(discordDirectory, info.ApplicationID, command);
             }
-
-            logger.Trace("Registering Steam Command");
-
-            //Prepare the command
-            string command = exe;
-            if (info.UsingSteamApp) command = $"steam://rungameid/{info.SteamAppID}";
-            else logger.Warning("This library does not fully support MacOS URI Scheme Registration.");
-
-            //get the folder ready
-            foreach (var folder in DiscordClientFolders)
+            else
             {
-                string discordDirectory = Path.Combine(
-                    Environment.GetEnvironmentVariable("HOME"),
-                    "Library/Application Support/",
-                    folder
-                );
-
-                if (Directory.Exists(discordDirectory))
-                {
-                    logger.Trace("Discord client folder exists: {0}", discordDirectory);
-                    RegisterSchemeForClient(discordDirectory, info.ApplicationID, command);
-                }
-                else
-                {
-                    logger.Trace("Discord client folder does not exist: {0}", discordDirectory);
-                }
+                _logger?.LogTrace("Discord client folder does not exist: {}", discordDirectory);
             }
-
-            return true;
         }
 
-        private void RegisterSchemeForClient(string discordDirectory, string appId, string command)
-        {
-            string filepath = Path.Combine(discordDirectory, "games", $"{appId}.json");
-            if (!Directory.Exists(Path.GetDirectoryName(filepath)))
-                Directory.CreateDirectory(Path.GetDirectoryName(filepath));
+        return true;
+    }
 
-            //Write the contents to file
-            string applicationSchemeFilePath = filepath;
-            File.WriteAllText(applicationSchemeFilePath, $"{{ \"command\": \"{command}\" }}");
-        }
+    private static void RegisterSchemeForClient(string discordDirectory, string appId, string command)
+    {
+        string filepath = Path.Combine(discordDirectory, "games", $"{appId}.json");
+        if (!Directory.Exists(Path.GetDirectoryName(filepath)))
+            Directory.CreateDirectory(Path.GetDirectoryName(filepath) ?? "");
+
+        //Write the contents to file
+        File.WriteAllText(filepath, $"{{ \"command\": \"{command}\" }}");
     }
 }
