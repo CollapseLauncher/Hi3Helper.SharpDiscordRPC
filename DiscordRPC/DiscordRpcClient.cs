@@ -216,7 +216,7 @@ public sealed class DiscordRpcClient : IDisposable
     /// <param name="logger">The logger used to report messages. If null, then a <see cref="NullLogger"/> will be created and logs will be ignored.</param>
     /// <param name="autoEvents">Should events be automatically invoked from the RPC Thread as they arrive from discord?</param>
     /// <param name="client">The pipe client to use and communicate to discord through. If null, the default <see cref="ManagedNamedPipeClient"/> will be used.</param>
-    public DiscordRpcClient(string applicationID, int pipe = -1, ILogger? logger = null, bool autoEvents = true, INamedPipeClient? client = null)
+    public DiscordRpcClient(string applicationID, int pipe = -1, ILogger? logger = null, bool autoEvents = true)
     {
         //Make sure appID is NOT null.
         if (string.IsNullOrEmpty(applicationID))
@@ -231,7 +231,7 @@ public sealed class DiscordRpcClient : IDisposable
         SkipIdenticalPresence  = true;
 
         //Create the RPC client, giving it the important details
-        _connection = new RpcConnection(ApplicationID, ProcessID, TargetPipe, client ?? new ManagedNamedPipeClient(), logger, autoEvents ? 0 : 128U)
+        _connection = new RpcConnection(ApplicationID, ProcessID, TargetPipe, new ManagedNamedPipeClient(), logger, autoEvents ? 0 : 128U)
         {
             ShutdownOnly = _shutdownOnly
         };

@@ -5,17 +5,16 @@ using System.Threading;
 using System.IO;
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Linq;
+using System.Threading.Tasks;
 // ReSharper disable UnusedMember.Global
 
 #pragma warning disable CA1873
-
 namespace DiscordRPC.IO;
 
 /// <summary>
 /// A named pipe client using the .NET framework <see cref="NamedPipeClientStream"/>
 /// </summary>
-public sealed class ManagedNamedPipeClient : INamedPipeClient
+public sealed class ManagedNamedPipeClient
 {
     /// <summary>
     /// The logger for the Pipe client to use
@@ -47,8 +46,6 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
 
     private readonly ConcurrentQueue<PipeFrame> _frameQueue = new();
 
-    private readonly Lock _lStream = new();
-
     private volatile bool _isDisposed;
     private volatile bool _isClosed = true;
 
@@ -66,9 +63,7 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
     /// <summary>
     /// Connects to the pipe
     /// </summary>
-    /// <param name="pipe"></param>
-    /// <returns></returns>
-    public bool Connect(int pipe)
+    public async Task<bool> TryConnectAsync(int pipe)
     {
         Logger?.LogTrace("ManagedNamedPipeClient.Connection({})", pipe);
 
@@ -81,38 +76,41 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
         if (pipe >= 0)
             startPipe = pipe;
 
-        if (!PipeLocation.GetPipes(startPipe).Any(AttemptConnection))
+        foreach (string pipeName in PipeLocation.GetPipes(startPipe))
         {
-            return false;
+            if (!await AttemptConnectionAsync(pipeName))
+            {
+                continue;
+            }
+
+            BeginReadStream();
+            return true;
         }
 
-        BeginReadStream();
-        return true;
+        return false;
     }
 
     /// <summary>
     /// Attempts a new connection
     /// </summary>
     /// <returns></returns>
-    private bool AttemptConnection(string pipeName)
+    private async Task<bool> AttemptConnectionAsync(string pipeName)
     {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
-
         try
         {
             //Create the client
-            using (_lStream.EnterScope())
+            Logger?.LogInformation("Attempting to connect to '{}'", pipeName);
+            _stream = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+
+            // Intentionally use a timeout of 0 here to avoid spinlock overhead.
+            // We are already performing local retry logic, so this is not required.
+            await _stream.ConnectAsync(1000);
+
+            //Spin for a bit while we wait for it to finish connecting
+            Logger?.LogTrace("Waiting for connection...");
+            while (!_stream.IsConnected)
             {
-                Logger?.LogInformation("Attempting to connect to '{}'", pipeName);
-                _stream = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-
-                // Intentionally use a timeout of 0 here to avoid spinlock overhead.
-                // We are already performing local retry logic, so this is not required.
-                _stream.Connect(0);
-
-                //Spin for a bit while we wait for it to finish connecting
-                Logger?.LogTrace("Waiting for connection...");
-                do { Thread.Sleep(10); } while (!_stream.IsConnected);
+                await Task.Delay(100);
             }
 
             //Store the value
@@ -141,14 +139,11 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
 
         try
         {
-            using (_lStream.EnterScope())
-            {
-                //Make sure the stream is valid
-                if (_stream is not { IsConnected: true }) return;
+            // Make sure the stream is valid
+            if (_stream is not { IsConnected: true }) return;
 
-                Logger?.LogTrace("Beginning Read of {} bytes", _buffer.Length);
-                _stream.BeginRead(_buffer, 0, _buffer.Length, EndReadStream, _stream.IsConnected);
-            }
+            Logger?.LogTrace("Beginning Read of {} bytes", _buffer.Length);
+            _stream.BeginRead(_buffer, 0, _buffer.Length, EndReadStream, _stream.IsConnected);
         }
         catch (ObjectDisposedException)
         {
@@ -176,15 +171,12 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
 
         try
         {
-            //Attempt to read the bytes, catching for IO exceptions or dispose exceptions
-            using (_lStream.EnterScope())
-            {
-                //Make sure the stream is still valid
-                if (_stream is not { IsConnected: true }) return;
+            // Attempt to read the bytes, catching for IO exceptions or dispose exceptions
+            // Make sure the stream is still valid
+            if (_stream is not { IsConnected: true }) return;
 
-                //Read our bytes
-                bytes = _stream.EndRead(callback);
-            }
+            // Read our bytes
+            bytes = _stream.EndRead(callback);
         }
         catch (IOException)
         {
@@ -207,16 +199,16 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
             return;
         }
 
-        //How much did we read?
+        // How much did we read?
         Logger?.LogTrace("Read {} bytes", bytes);
 
-        //Did we read anything? If we did we should enqueue it.
+        // Did we read anything? If we did we should enqueue it.
         if (bytes > 0)
         {
-            //Load it into a memory stream and read the frame
+            // Load it into a memory stream and read the frame
             try
             {
-                PipeFrame frame = default;
+                PipeFrame frame = PipeFrame.Create();
                 if (frame.ReadBuffer(_buffer.AsSpan(0, bytes)))
                 {
                     Logger?.LogTrace("Read a frame: {}", frame.Opcode);
@@ -259,22 +251,19 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
     /// </summary>
     /// <param name="frame"></param>
     /// <returns></returns>
-    public bool ReadFrame(out PipeFrame frame)
+    public bool ReadFrame(out PipeFrame? frame)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
         //Check the queue, returning the pipe if we have anything available. Otherwise, null.
-
         if (!_frameQueue.IsEmpty)
         {
             return _frameQueue.TryDequeue(out frame);
         }
 
         //We found nothing, so just default and return null
-        frame = default;
+        frame = PipeFrame.Create();
         return false;
-
-        //Return the dequeued frame
     }
 
     /// <summary>
@@ -316,10 +305,6 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
         {
             Logger?.LogWarning("Failed to write frame because of a invalid operation");
         }
-        finally
-        {
-            frame.Dispose();
-        }
 
         //We must have failed the try catch
         return false;
@@ -341,31 +326,28 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
         try
         {
             //Wait for the stream object to become available.
-            using (_lStream.EnterScope())
+            if (_stream != null)
             {
-                if (_stream != null)
+                try
                 {
-                    try
-                    {
-                        //Stream isn't null, so flush it and then dispose of it.\
-                        // We are doing a catch here because it may throw an error during this process, and we don't care if it fails.
-                        _stream.Flush();
-                        _stream.Dispose();
-                    }
-                    catch (Exception)
-                    {
-                        //We caught an error, but we don't care anyway because we are disposing of the stream.
-                    }
+                    //Stream isn't null, so flush it and then dispose of it.\
+                    // We are doing a catch here because it may throw an error during this process, and we don't care if it fails.
+                    _stream.Flush();
+                    _stream.Dispose();
+                }
+                catch (Exception)
+                {
+                    //We caught an error, but we don't care anyway because we are disposing of the stream.
+                }
 
-                    //Make the stream null and set our flag.
-                    _stream = null;
-                    _isClosed = true;
-                }
-                else
-                {
-                    //The stream is already null?
-                    Logger?.LogWarning("Stream was closed, but no stream was available to begin with!");
-                }
+                //Make the stream null and set our flag.
+                _stream   = null;
+                _isClosed = true;
+            }
+            else
+            {
+                //The stream is already null?
+                Logger?.LogWarning("Stream was closed, but no stream was available to begin with!");
             }
         }
         catch (ObjectDisposedException)
@@ -399,36 +381,4 @@ public sealed class ManagedNamedPipeClient : INamedPipeClient
         ArrayPool<byte>.Shared.Return(_buffer);
         GC.SuppressFinalize(this);
     }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="pipe"></param>
-    /// <returns></returns>
-    [Obsolete("Use PipePermutation.GetPipes instead", true)]
-    public static string GetPipeName(int pipe)
-        => string.Empty;
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="pipe"></param>
-    /// <param name="sandbox"></param>
-    /// <returns></returns>
-    [Obsolete("Use PipePermutation.GetPipes instead", true)]
-    public static string GetPipeName(int pipe, string sandbox)
-        => string.Empty;
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <returns></returns>
-    [Obsolete("Use PipePermutation.GetPipes instead", true)]
-    public static string GetPipeSandbox()
-        => string.Empty;
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <returns></returns>
-    [Obsolete("Use PipePermutation.GetPipes instead", true)]
-    public static bool IsUnix()
-        => true;
 }

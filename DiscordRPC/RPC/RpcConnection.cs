@@ -6,7 +6,8 @@ using DiscordRPC.RPC.Commands;
 using DiscordRPC.RPC.Payload;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Reflection;
 using System.Text.Json.Serialization.Metadata;
 using System.Threading;
 using System.Timers;
@@ -105,26 +106,24 @@ internal class RpcConnection : IDisposable
 
     #region Privates
 
-    private readonly string _applicationID;                  // ID of the Discord APP
-    private readonly int    _processID;                      // ID of the process to track
+    private readonly string _applicationID; // ID of the Discord APP
+    private readonly int    _processID;     // ID of the process to track
 
-    private long _nonce;                                     // Current command index
+    private long _nonce; // Current command index
 
-    private          Thread?           _thread;              // The current thread
-    private readonly INamedPipeClient? _namedPipe;
+    private          Thread?                 _thread; // The current thread
+    private readonly ManagedNamedPipeClient? _namedPipe;
 
-    private readonly int _targetPipe;                        // The pipe to taget. Leave as -1 for any available pipe.
+    private readonly int _targetPipe; // The pipe to taget. Leave as -1 for any available pipe.
 
-    private readonly Lock            _lRtQueue = new();      // Lock for the send queue
-    private readonly uint            _maxRtQueueSize;
-    private readonly Queue<ICommand> _rtQueue;               // The send queue
+    private readonly uint _maxRtQueueSize;
+    private readonly uint _maxRxQueueSize;
 
-    private readonly Lock               _lRxQueue = new();   // Lock for the received queue
-    private readonly uint               _maxRxQueueSize;     // The max size of the RX queue
-    private readonly Queue<MessageBase> _rxQueue;            // The receive queue
+    private readonly ConcurrentQueue<ICommand>    _rtQueue; // The send queue
+    private readonly ConcurrentQueue<MessageBase> _rxQueue; // The receive queue
 
     private readonly AutoResetEvent _queueUpdatedEvent = new(false);
-    private readonly BackoffDelay   _delay;                  // The backoff delay before reconnecting.
+    private readonly BackoffDelay   _delay; // The backoff delay before reconnecting.
     #endregion
 
     /// <summary>
@@ -137,23 +136,22 @@ internal class RpcConnection : IDisposable
     /// <param name="maxRxQueueSize">The maximum size of the out queue</param>
     /// <param name="maxRtQueueSize">The maximum size of the in queue</param>
     /// <param name="logger">The logger for the instance</param>
-    public RpcConnection(string applicationID, int processID, int targetPipe, INamedPipeClient client, ILogger? logger = null, uint maxRxQueueSize = 128, uint maxRtQueueSize = 512)
+    public RpcConnection(string applicationID, int processID, int targetPipe, ManagedNamedPipeClient client, ILogger? logger = null, uint maxRxQueueSize = 128, uint maxRtQueueSize = 512)
     {
         _applicationID = applicationID;
-        _processID = processID;
-        _targetPipe = targetPipe;
-        _namedPipe = client;
-        ShutdownOnly = true;
+        _processID     = processID;
+        _targetPipe    = targetPipe;
+        _namedPipe     = client;
+        ShutdownOnly   = true;
 
         // Assign a default logger
         Logger = logger;
 
-        _delay = new BackoffDelay(500, 60 * 1000);
+        _delay          = new BackoffDelay(500, 60 * 1000);
         _maxRtQueueSize = maxRtQueueSize;
-        _rtQueue = new Queue<ICommand>((int)_maxRtQueueSize + 1);
-
         _maxRxQueueSize = maxRxQueueSize;
-        _rxQueue = new Queue<MessageBase>((int)_maxRxQueueSize + 1);
+        _rtQueue        = new ConcurrentQueue<ICommand>();
+        _rxQueue        = new ConcurrentQueue<MessageBase>();
 
         _nonce = 0;
     }
@@ -165,6 +163,7 @@ internal class RpcConnection : IDisposable
     }
 
     #region Queues
+
     /// <summary>
     /// Enqueues a command
     /// </summary>
@@ -177,18 +176,15 @@ internal class RpcConnection : IDisposable
         if (_aborting || _shutdown) return;
 
         // Enqueue the set presence argument
-        lock (_lRtQueue)
+        // If we are too big drop the last element
+        if (_rtQueue.Count == _maxRtQueueSize)
         {
-            // If we are too big drop the last element
-            if (_rtQueue.Count == _maxRtQueueSize)
-            {
-                Logger?.LogError("Too many enqueued commands, dropping oldest one. Maybe you are pushing new presences to fast?");
-                _rtQueue.Dequeue();
-            }
-
-            // Enqueue the message
-            _rtQueue.Enqueue(command);
+            Logger?.LogError("Too many enqueued commands, dropping oldest one. Maybe you are pushing new presences to fast?");
+            _rtQueue.TryDequeue(out _);
         }
+
+        // Enqueue the message
+        _rtQueue.Enqueue(command);
     }
 
     /// <summary>
@@ -220,20 +216,18 @@ internal class RpcConnection : IDisposable
 
         // Large queue sizes should keep the queue in check
         Logger?.LogTrace("Enqueue Message: {}", message?.Type);
-        lock (_lRxQueue)
-        {
-            // If we are too big drop the last element
-            if (_rxQueue.Count == _maxRxQueueSize)
-            {
-                Logger?.LogWarning("Too many enqueued messages, dropping oldest one.");
-                _rxQueue.Dequeue();
-            }
 
-            // Enqueue the message
-            if (message != null)
-            {
-                _rxQueue.Enqueue(message);
-            }
+        // If we are too big drop the last element
+        if (_rxQueue.Count == _maxRxQueueSize)
+        {
+            Logger?.LogWarning("Too many enqueued messages, dropping oldest one.");
+            _rxQueue.TryDequeue(out _);
+        }
+
+        // Enqueue the message
+        if (message != null)
+        {
+            _rxQueue.Enqueue(message);
         }
     }
 
@@ -244,14 +238,12 @@ internal class RpcConnection : IDisposable
     internal MessageBase? DequeueMessage()
     {
         // Logger?.LogTrace("Deque Message");
-        using (_lRxQueue.EnterScope())
-        {
-            // We have nothing, so just return null.
-            if (_rxQueue.Count == 0) return null;
+        // We have nothing, so just return null.
+        if (_rxQueue.IsEmpty) return null;
 
-            // Get the value and remove it from the list at the same time
-            return _rxQueue.Dequeue();
-        }
+        // Get the value and remove it from the list at the same time
+        _rxQueue.TryDequeue(out MessageBase? message);
+        return message;
     }
 
     /// <summary>
@@ -261,18 +253,16 @@ internal class RpcConnection : IDisposable
     internal MessageBase[] DequeueMessages()
     {
         // Logger?.LogTrace("Deque Multiple Messages");
-        using (_lRxQueue.EnterScope())
-        {
-            // Copy the messages into an array
-            MessageBase[] messages = _rxQueue.ToArray();
+        // Copy the messages into an array
+        MessageBase[] messages = [.. _rxQueue];
 
-            // Clear the entire queue
-            _rxQueue.Clear();
+        // Clear the entire queue
+        _rxQueue.Clear();
 
-            // return the array
-            return messages;
-        }
+        // return the array
+        return messages;
     }
+
     #endregion
 
     /// <summary>
@@ -290,7 +280,7 @@ internal class RpcConnection : IDisposable
         if (Logger?.IsEnabled(LogLevel.Trace) ?? false)
         {
             Logger.LogTrace("============================");
-            Logger.LogTrace("Assembly:             {}", System.Reflection.Assembly.GetAssembly(typeof(RichPresence))?.FullName);
+            Logger.LogTrace("Assembly:             {}", Assembly.GetAssembly(typeof(RichPresence))?.FullName);
             Logger.LogTrace("Pipe:                 {}", _namedPipe?.GetType().FullName);
             Logger.LogTrace("Platform:             {}", Environment.OSVersion);
             Logger.LogTrace("DotNet:               {}", Environment.Version);
@@ -307,18 +297,18 @@ internal class RpcConnection : IDisposable
         _timer.Start();
     }
 
-    private void WaitHandleEvent(object? sender, ElapsedEventArgs args)
+    private async void WaitHandleEvent(object? sender, ElapsedEventArgs args)
     {
-        // Exit if timer has already been disposed (null)
-        if (_timer == null)
-        {
-            return;
-        }
-
-        _timer.Stop(); // Pause the timer while we process
-
         try
         {
+            // Exit if timer has already been disposed (null)
+            if (_timer == null)
+            {
+                return;
+            }
+
+            _timer.Stop(); // Pause the timer while we process
+
             if (_namedPipe == null)
             {
                 Logger?.LogError("Something bad has happened with our pipe client!");
@@ -352,15 +342,13 @@ internal class RpcConnection : IDisposable
 
                 // Connect to a new pipe
                 Logger?.LogTrace("Connecting to the pipe through the {}", _namedPipe.GetType().FullName);
-                if (_namedPipe.Connect(_targetPipe))
+                if (await _namedPipe.TryConnectAsync(_targetPipe))
                 {
                     #region Connected
                     // We connected to a pipe! Reset the delay
                     Logger?.LogTrace("Connected to the pipe. Attempting to establish handshake...");
 
-#pragma warning disable CS0618 // We know ConnectedPipe is obsolete, but we still need to use it for the ConnectionEstablishedMessage
-                    EnqueueMessage(new ConnectionEstablishedMessage { ConnectedPipe = _namedPipe.ConnectedPipe });
-#pragma warning restore CS0618
+                    EnqueueMessage(new ConnectionEstablishedMessage());
 
                     // Attempt to establish a handshake
                     EstablishHandshake();
@@ -379,7 +367,7 @@ internal class RpcConnection : IDisposable
             bool mainLoop = true;
             while (mainLoop && _namedPipe.IsConnected)
             {
-                if (_namedPipe.ReadFrame(out PipeFrame frame))
+                if (_namedPipe.ReadFrame(out PipeFrame? frame) && frame != null)
                 {
                     #region Read Frame
                     Logger?.LogTrace("Read Payload: {}", frame.Opcode);
@@ -417,7 +405,7 @@ internal class RpcConnection : IDisposable
                                 break;
                             }
 
-                            if (frame.Data == null)
+                            if (frame.Data.Length == 0)
                             {
                                 // We have invalid data, that's not good.
                                 Logger?.LogError("We received no data from the frame so we cannot get the event payload!");
@@ -451,8 +439,6 @@ internal class RpcConnection : IDisposable
                             mainLoop = false;
                             break;
                     }
-
-                    frame.Dispose();
 
                     #endregion
                 }
@@ -662,16 +648,15 @@ internal class RpcConnection : IDisposable
         // Continue looping until we don't need anymore messages
         while (needsWriting && _namedPipe.IsConnected)
         {
-            ICommand item;
-            lock (_lRtQueue)
-            {
-                //Pull the value and update our writing needs
-                // If we have nothing to write, exit the loop
-                needsWriting = _rtQueue.Count > 0;
-                if (!needsWriting) break;
+            // Pull the value and update our writing needs
+            // If we have nothing to write, exit the loop
+            needsWriting = !_rtQueue.IsEmpty;
+            if (!needsWriting) break;
 
-                //Peek at the item
-                item = _rtQueue.Peek();
+            //Peek at the item
+            if (!_rtQueue.TryPeek(out ICommand? item))
+            {
+                break;
             }
 
             //Break out of the loop as soon as we send this item
@@ -683,7 +668,7 @@ internal class RpcConnection : IDisposable
             Logger?.LogTrace("Attempting to send payload: {}", payload.Command);
 
             //Prepare the frame
-            PipeFrame frame = new();
+            PipeFrame frame = PipeFrame.Create();
             if (item is CloseCommand)
             {
                 //We have been sent a close frame. We better just send handwave
@@ -692,7 +677,7 @@ internal class RpcConnection : IDisposable
 
                 //Queue the item
                 Logger?.LogTrace("Handwave sent, ending queue processing.");
-                lock (_lRtQueue) _rtQueue.Dequeue();
+                _rtQueue.TryDequeue(out _);
 
                 //Stop sending any more messages
                 return;
@@ -702,12 +687,12 @@ internal class RpcConnection : IDisposable
             {
                 //We are aborting, so just dequeue the message and don't bother sending it
                 Logger?.LogWarning("- skipping frame because of abort.");
-                lock (_lRtQueue) _rtQueue.Dequeue();
+                _rtQueue.TryDequeue(out _);
             }
             else
             {
                 //Prepare the frame
-                Type payloadType = payload.GetType();
+                Type          payloadType    = payload.GetType();
                 JsonTypeInfo? typeOfTypeInfo = JsonSerializationContext.Default.GetTypeInfo(payloadType);
                 if (typeOfTypeInfo == null)
                 {
@@ -715,6 +700,7 @@ internal class RpcConnection : IDisposable
                     Logger?.LogError(new InvalidCastException(), "{}", exMsg);
                     return;
                 }
+
                 frame.SetObject(Opcode.Frame, payload, typeOfTypeInfo);
 
                 //Write it and if it wrote perfectly fine, we will dequeue it
@@ -726,7 +712,7 @@ internal class RpcConnection : IDisposable
                 {
                     //We sent it, so now dequeue it
                     Logger?.LogTrace("Sent Successfully.");
-                    lock (_lRtQueue) _rtQueue.Dequeue();
+                    _rtQueue.TryDequeue(out _);
                 }
                 else
                 {
@@ -857,12 +843,9 @@ internal class RpcConnection : IDisposable
         _shutdown = true;
 
         //Clear the commands and enqueue the close
-        lock (_lRtQueue)
-        {
-            _rtQueue.Clear();
-            if (ClearOnShutdown) _rtQueue.Enqueue(new PresenceCommand { Pid = _processID, Presence = null });
-            _rtQueue.Enqueue(new CloseCommand());
-        }
+        _rtQueue.Clear();
+        if (ClearOnShutdown) _rtQueue.Enqueue(new PresenceCommand { Pid = _processID, Presence = null });
+        _rtQueue.Enqueue(new CloseCommand());
 
         //Trigger the event
         _queueUpdatedEvent.Set();
