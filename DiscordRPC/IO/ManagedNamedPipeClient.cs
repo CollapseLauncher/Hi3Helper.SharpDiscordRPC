@@ -140,7 +140,7 @@ public sealed class ManagedNamedPipeClient
         try
         {
             // Make sure the stream is valid
-            if (_stream is not { IsConnected: true }) return;
+            if (!(_stream?.IsConnected ?? false)) return;
 
             Logger?.LogTrace("Beginning Read of {} bytes", _buffer.Length);
             _stream.BeginRead(_buffer, 0, _buffer.Length, EndReadStream, _stream.IsConnected);
