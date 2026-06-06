@@ -1,17 +1,17 @@
 ﻿using System;
-using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+// ReSharper disable NonReadonlyMemberInGetHashCode
 
 namespace DiscordRPC.IO;
 
 /// <summary>
 /// A frame received and sent to the Discord client for RPC communications.
 /// </summary>
-public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
+public class PipeFrame : IEquatable<PipeFrame>
 {
     /// <summary>
     /// The maximum size of a pipe frame (16kb).
@@ -26,20 +26,36 @@ public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
     /// <summary>
     /// The length of the frame data
     /// </summary>
-    public uint Length { get; private set; }
+    public int Length { get; set; }
 
     /// <summary>
     /// The data in the frame
     /// </summary>
-    public byte[]? Data { get; set; }
+    public byte[] Data
+    {
+        get;
+        private set;
+    }
 
     /// <summary>
     /// The data represented as a string.
     /// </summary>
     public string Message
     {
-        get { return GetMessage(); }
-        set { SetMessage(value); }
+        get => MessageEncoding.GetString(Data);
+        set
+        {
+            int        maxDataBytes = MessageEncoding.GetByteCount(value);
+            Span<byte> data         = SetData(maxDataBytes);
+            Length = MessageEncoding.GetBytes(value, data);
+        }
+    }
+
+    private PipeFrame(Opcode opcode)
+    {
+        Opcode = opcode;
+        Data   = [];
+        Length = 0;
     }
 
     /// <summary>
@@ -51,16 +67,13 @@ public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
     public static PipeFrame Create<T>(Opcode opcode, T data, JsonTypeInfo<T> jsonTypeInfo)
         where T : class
     {
-        PipeFrame frame = new()
-        {
-            Opcode = opcode,
-            Data   = null,
-            Length = 0
-        };
+        PipeFrame frame = new(opcode);
         frame.SetObject(data, jsonTypeInfo);
 
         return frame;
     }
+
+    public static PipeFrame Create() => new(default);
 
     /// <summary>
     /// Gets the encoding used for the pipe frames
@@ -68,24 +81,23 @@ public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
     private static Encoding MessageEncoding => Encoding.UTF8;
 
     /// <summary>
-    /// Sets the data based of a string
+    /// Sets the data to a new byte array of the specified length. If there is already data, it will be freed first.
+    /// If <paramref name="length"/> is 0, the data will be freed and unallocated.
     /// </summary>
-    /// <param name="str"></param>
-    private void SetMessage(string str)
+    /// <param name="length">The length of the new data buffer</param>
+    /// <returns>A span representing the new data buffer</returns>
+    private Span<byte> SetData(int length)
     {
-        int maxDataBytes = MessageEncoding.GetByteCount(str);
-        Data = ArrayPool<byte>.Shared.Rent(maxDataBytes);
-        Length = (uint)MessageEncoding.GetBytes(str, Data);
-    }
+        if (length == 0)
+        {
+            Data   = [];
+            Length = 0;
+            return Span<byte>.Empty;
+        }
 
-    /// <summary>
-    /// Gets a string based of the data
-    /// </summary>
-    /// <returns></returns>
-    private string GetMessage()
-    {
-        Span<byte> dataSpan = Data;
-        return MessageEncoding.GetString(dataSpan[..(int)Length]);
+        Data   = GC.AllocateUninitializedArray<byte>(length);
+        Length = length;
+        return new Span<byte>(Data, 0, length);
     }
 
     /// <summary>
@@ -105,11 +117,8 @@ public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
     /// </summary>
     /// <param name="obj"></param>
     /// <param name="jsonTypeInfo"></param>
-    public void SetObject(object obj, JsonTypeInfo jsonTypeInfo)
-    {
-        string json = JsonSerializer.Serialize(obj, jsonTypeInfo);
-        SetMessage(json);
-    }
+    public void SetObject(object obj, JsonTypeInfo jsonTypeInfo) =>
+        Message = JsonSerializer.Serialize(obj, jsonTypeInfo);
 
     /// <summary>
     /// Deserializes the data into the supplied type using JSON.
@@ -117,39 +126,33 @@ public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
     /// <typeparam name="T">The type to deserialize into</typeparam>
     /// <returns></returns>
     public T? GetObject<T>(JsonTypeInfo<T> typeInfo)
-        where T : class
-    {
-        string json = GetMessage();
-        return JsonSerializer.Deserialize(json, typeInfo);
-    }
+        where T : class =>
+        JsonSerializer.Deserialize(Message, typeInfo);
 
     /// <summary>
     /// Attempts to read the contents of the frame from the stream
     /// </summary>
-    public bool ReadBuffer(Span<byte> frameBuffer)
+    public bool ReadBuffer(scoped Span<byte> frameBuffer)
     {
-        if (frameBuffer.Length < 8) // sizeof(long)
+        if (frameBuffer.Length < 8)
         {
             return false;
         }
 
         Opcode = MemoryMarshal.Read<Opcode>(frameBuffer);
-        Length = MemoryMarshal.Read<uint>(frameBuffer[4..]);
+        Length = MemoryMarshal.Read<int>(frameBuffer[4..]);
 
-        scoped Span<byte> dataBuffer = frameBuffer.Slice(8, (int)Length);
+        frameBuffer = frameBuffer.Slice(8, Length);
+        scoped Span<byte> dataSpan = SetData(Length);
 
-        Data = ArrayPool<byte>.Shared.Rent((int)Length);
-        scoped Span<byte> toCopyBufferSpan = Data.AsSpan(0, (int)Length);
-        if (toCopyBufferSpan.Length >= dataBuffer.Length &&
-            dataBuffer.TryCopyTo(toCopyBufferSpan))
+        if (dataSpan.Length >= frameBuffer.Length &&
+            frameBuffer.TryCopyTo(dataSpan))
         {
             return true;
         }
 
-        ArrayPool<byte>.Shared.Return(Data);
-        Data = null;
+        SetData(0);
         return false;
-
     }
 
     /// <summary>
@@ -158,45 +161,26 @@ public struct PipeFrame : IEquatable<PipeFrame>, IDisposable
     /// <param name="stream"></param>
     public void WriteStream(Stream stream)
     {
-        int dataLength = 8 + (int)Length;
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(dataLength);
-        scoped Span<byte> bufferSpan = buffer.AsSpan(0, dataLength);
-        try
-        {
-            MemoryMarshal.Write(bufferSpan, Opcode);
-            MemoryMarshal.Write(bufferSpan[4..], Length);
-
-            // Copy it all into a buffer
-            scoped Span<byte> contentData = bufferSpan[8..];
-            scoped Span<byte> sourceData = Data.AsSpan(0, (int)Length);
-            sourceData.CopyTo(contentData);
-
-            // Write it to the stream
-            stream.Write(bufferSpan);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+        using BinaryWriter writer = new(stream, MessageEncoding, true);
+        writer.Write((int)Opcode);
+        writer.Write(Length);
+        writer.Write(Data);
     }
 
     /// <summary>
     /// Compares if the frame equals the other frame.
     /// </summary>
-    /// <param name="other"></param>
-    /// <returns></returns>
-    public bool Equals(PipeFrame other)
-    {
-        return Opcode == other.Opcode &&
-                Length == other.Length &&
-                Data.AsSpan(0, (int)Length).SequenceEqual(other.Data.AsSpan(0, (int)other.Length));
-    }
+    public bool Equals(PipeFrame? other) => Opcode == other?.Opcode &&
+                                            Length == other.Length &&
+                                            (Data == other.Data ||
+                                             Data.SequenceEqual(other.Data));
 
-    public void Dispose()
-    {
-        if (Data != null)
-        {
-            ArrayPool<byte>.Shared.Return(Data);
-        }
-    }
+    /// <summary>
+    /// Compares if the frame equals the other frame.
+    /// </summary>
+    public override bool Equals(object? obj) =>
+        obj is PipeFrame other &&
+        Equals(other);
+
+    public override int GetHashCode() => HashCode.Combine(Opcode, Length, Data);
 }
